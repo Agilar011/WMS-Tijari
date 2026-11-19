@@ -1,6 +1,4 @@
 import logging
-import requests
-import logging
 
 from odoo import models, fields, api
 from odoo.exceptions import UserError
@@ -202,6 +200,96 @@ class AcumaticaIssuePoReturnLine(models.Model):
             uom = product.uom_id
         return uom
 
+    def _create_issue_po_return_moves(
+        self, product_lines, picking, dest_location, action_state,
+        previous_moves, update_messages, products_by_inventory_id,
+    ):
+        """Create stock moves for one PO Return document."""
+        Move = self.env['stock.move']
+
+        for item in product_lines:
+            product = products_by_inventory_id.get(item.inventory_id)
+            if not product:
+                raise UserError(
+                    f'Product tidak ditemukan untuk InventoryID: '
+                    f'{item.inventory_id or "-"}'
+                )
+
+            uom = product.uom_id
+            qty = self._parse_qty(item.product_uom_qty)
+            if not qty:
+                qty = self._parse_qty(
+                    item.order_qty or item.receipt_line_id.order_qty
+                )
+
+            move_vals = {
+                'name': item.line_description or product.display_name,
+                'picking_id': picking.id,
+                'product_id': product.id,
+                'product_uom_qty': qty,
+                'product_uom': uom.id if uom else product.uom_id.id,
+                'location_id': picking.location_id.id,
+                'location_dest_id': dest_location.id,
+                'adt_line_external_id': item.line_external_id or False,
+                'adt_inventory_id': item.inventory_id or False,
+                'adt_line_nbr': item.line_nbr or False,
+                'adt_uom_code': item.uom_code or False,
+                'adt_warehouse_code': item.warehouse_code or False,
+                'adt_location_code': item.location_code or False,
+                'adt_line_note': item.line_note or False,
+                'product_note': item.line_note or False,
+                'adt_type': 'Issue PO Return',
+            }
+            move_vals = {
+                key: value for key, value in move_vals.items()
+                if key in Move._fields
+            }
+            created_move = Move.create(move_vals)
+
+            if action_state == 'updated':
+                self._append_issue_po_return_update_message(
+                    item, created_move, product, uom, qty,
+                    previous_moves, update_messages,
+                )
+
+    def _append_issue_po_return_update_message(
+        self, item, created_move, product, uom, qty,
+        previous_moves, update_messages,
+    ):
+        line_key = str(
+            item.line_external_id or item.line_nbr
+            or item.inventory_id or created_move.id
+        )
+        old = previous_moves.pop(line_key, None)
+        label = item.line_nbr or item.line_external_id or item.inventory_id or '?'
+        current = {
+            'Produk': product.display_name or '—',
+            'Jumlah': f'{qty:g}',
+            'Satuan': uom.display_name or '—',
+            'Lokasi tujuan': created_move.location_dest_id.display_name or '—',
+            'Deskripsi': created_move.name or '—',
+        }
+        if old:
+            previous = {
+                'Produk': old['product'],
+                'Jumlah': f"{old['qty']:g}",
+                'Satuan': old['uom'],
+                'Lokasi tujuan': old['destination'],
+                'Deskripsi': old['name'],
+            }
+            changes = [
+                f'{name}: {previous[name]} → {value}'
+                for name, value in current.items()
+                if previous[name] != value
+            ]
+            if changes:
+                update_messages.append(f'• Baris {label}: ' + '; '.join(changes))
+        else:
+            update_messages.append(
+                f'• Baris {label}: {product.display_name}, jumlah {qty:g} '
+                f'{uom.display_name if uom else ""} ditambahkan'
+            )
+
     def _adt_reresolve_picking_type(self):
         """Document Only PO Return uses DDO; normal PO Return starts at Pick."""
         self.ensure_one()
@@ -244,22 +332,7 @@ class AcumaticaIssuePoReturnLine(models.Model):
     def _do_import(self):
         Picking = self.env['stock.picking']
         Move = self.env['stock.move']
-        PickingType = self.env['stock.picking.type']
-
-        created = 0
-        updated = 0
-        error = 0
-
-        # raise UserError("Debug")
-
-        # proses per receipt number
-    def _do_import(self):
-        Picking = self.env['stock.picking']
-        Move = self.env['stock.move']
         ProductModel = self.env['product.product']
-
-        created = 0
-        updated = 0
 
         # =====================================================
         # 1. GROUPING BERDASARKAN RECEIPT NUMBER DARI STAGING INDUK
@@ -393,7 +466,6 @@ class AcumaticaIssuePoReturnLine(models.Model):
                             raise UserError(f'Receipt {receipt_nbr} sudah ada di Odoo dengan state {picking.state}, tidak bisa diupdate.')
                         picking.write(vals)
                         action_state = 'updated'
-                        updated += 1
                         self.env['acumatica.error.transaction']._handle_acumatica_update(first, origin=receipt_nbr)
                         
                         # OPTIMAL: Unlink/Hapus baris lama terlebih dahulu jika melakukan update agar data tidak menumpuk double
@@ -401,7 +473,6 @@ class AcumaticaIssuePoReturnLine(models.Model):
                     else:
                         picking = Picking.sudo().create(vals)
                         action_state = 'created'
-                        created += 1
 
                     # =====================================================
                     # 2. ITERASI PRODUK BERDASARKAN RELASI KE MODEL ANAK
@@ -427,56 +498,15 @@ class AcumaticaIssuePoReturnLine(models.Model):
                         raise UserError(f'PO Return {receipt_nbr} tidak memiliki detail produk.')
 
                     
-                    for item in product_lines:
-                        product = products_by_inventory_id.get(item.inventory_id)
-                        if not product:
-                            raise UserError(f'Product tidak ditemukan untuk InventoryID: {item.inventory_id or "-"}')
-
-                        uom = product.uom_id
-                        # Some PO Return payloads provide only Ordered Qty.
-                        qty = self._parse_qty(item.product_uom_qty)
-                        if not qty:
-                            qty = self._parse_qty(
-                                item.order_qty or item.receipt_line_id.order_qty
-                            )
-
-                        move_vals = {
-                            # PERBAIKAN: Hapus kata 'item.description' yang memicu AttributeError
-                            'name': item.line_description or product.display_name,
-                            'picking_id': picking.id,
-                            'product_id': product.id,
-                            'product_uom_qty': qty,
-                            'product_uom': uom.id if uom else product.uom_id.id,
-                            'location_id': picking.location_id.id,
-                            'location_dest_id': dest_location.id,
-                            # PERBAIKAN: Hapus kata 'item.description'
-                            # 'description_picking': product.name or False,
-
-                            'adt_line_external_id': item.line_external_id or False,
-                            'adt_inventory_id': item.inventory_id or False,
-                            'adt_line_nbr': item.line_nbr or False,
-                            'adt_uom_code': item.uom_code or False,
-                            'adt_warehouse_code': item.warehouse_code or False,
-                            'adt_location_code': item.location_code or False,
-                            'adt_line_note': item.line_note or False,
-                            'product_note': item.line_note or False,
-                            'adt_type': 'Issue PO Return',
-                        }
-                        
-                        move_vals = {k: v for k, v in move_vals.items() if k in Move._fields}
-                        created_move = Move.create(move_vals)
-                        if action_state == 'updated':
-                            line_key = str(item.line_external_id or item.line_nbr or item.inventory_id or created_move.id)
-                            old = previous_moves.pop(line_key, None)
-                            label = item.line_nbr or item.line_external_id or item.inventory_id or '?'
-                            current = {'Produk': product.display_name or '—', 'Jumlah': f'{qty:g}', 'Satuan': uom.display_name or '—', 'Lokasi tujuan': created_move.location_dest_id.display_name or '—', 'Deskripsi': created_move.name or '—'}
-                            if old:
-                                previous = {'Produk': old['product'], 'Jumlah': f"{old['qty']:g}", 'Satuan': old['uom'], 'Lokasi tujuan': old['destination'], 'Deskripsi': old['name']}
-                                changes = [f'{name}: {previous[name]} → {value}' for name, value in current.items() if previous[name] != value]
-                                if changes:
-                                    update_messages.append(f"• Baris {label}: " + '; '.join(changes))
-                            else:
-                                update_messages.append(f"• Baris {label}: {product.display_name}, jumlah {qty:g} {uom.display_name if uom else ''} ditambahkan")
+                    self._create_issue_po_return_moves(
+                        product_lines,
+                        picking,
+                        dest_location,
+                        action_state,
+                        previous_moves,
+                        update_messages,
+                        products_by_inventory_id,
+                    )
 
                     if action_state == 'updated':
                         update_messages.extend(f"• Baris {old['label']}: {old['product']} dihapus" for old in previous_moves.values())
@@ -485,11 +515,15 @@ class AcumaticaIssuePoReturnLine(models.Model):
                         picking.action_validate_document_only_import(force=True)
 
                     # Jika seluruh baris produk di atas sukses tanpa error, tandai status sebagai created
-                    receipt_lines.write({
-                        'import_state': action_state,
-                        'import_message': 'success',
-                        'odoo_picking_id': picking.id,
-                    })
+                    self._acumatica_write_import_result_once(
+                        receipt_lines,
+                        first,
+                        {
+                            'import_state': action_state,
+                            'import_message': 'success',
+                            'odoo_picking_id': picking.id,
+                        },
+                    )
                     self.env['acumatica.error.transaction']._handle_acumatica_error(receipt_nbr, 'issue_po_return')
                     if action_state == 'updated':
                         self.env['acumatica.webhook.error.service'].send_user_error(
@@ -505,6 +539,7 @@ class AcumaticaIssuePoReturnLine(models.Model):
                     self.env.cr.execute('ROLLBACK TO SAVEPOINT import_issue_po_return_doc')
                     import_message = f'!!! ERROR ON IMPORT PROCESS: {str(e)}'
                     error_text = str(e).lower()
+                    state_error_text = error_text
                     if 'vendor tidak ditemukan' in error_text:
                         user_message = f"Vendor dengan kode {first.vendor_code or first.partner_ref or '-'} belum terdaftar. Periksa master vendor di WMS."
                     elif 'warehouse tidak ditemukan' in error_text or 'location tujuan tidak ditemukan' in error_text:
@@ -546,11 +581,15 @@ class AcumaticaIssuePoReturnLine(models.Model):
                         } for line in tracked_lines],
                     )
                     
-                    receipt_lines.write({
-                        'import_state': 'rejected' if any(term in (locals().get('error_message') or str(locals().get('e') or locals().get('line_e') or '')).lower() for term in ('tidak bisa diupdate', 'update digagalkan', 'sudah divalidasi', 'already processed', 'state ready', 'state done', 'state processed')) else 'error',
-                        'import_message': import_message,
-                        'odoo_picking_id': False,
-                    })
+                    self._acumatica_write_import_result_once(
+                        receipt_lines,
+                        first,
+                        {
+                            'import_state': self._acumatica_import_error_state(str(e)),
+                            'import_message': import_message,
+                            'odoo_picking_id': False,
+                        },
+                    )
                     if user_message:
                         self.env['acumatica.webhook.error.service'].send_user_error(
                             webhook_type='import', webhook_name='Issue PO Return',
@@ -565,19 +604,6 @@ class AcumaticaIssuePoReturnLine(models.Model):
                     
                     # Teruskan loop ke dokumen receipt berikutnya
                     continue
-
-
-        # return {
-        #     'type': 'ir.actions.client',
-        #     'tag': 'display_notification',
-        #     'params': {
-        #         'title': 'Import Inventory Receipt',
-        #         'message': f'Generate selesai: {created} created, {updated} updated, {error} error.',
-        #         'type': 'success' if error == 0 else 'danger',
-        #         'sticky': True,
-        #     }
-        # }
-
     def action_reset_pending(self):
         self.filtered(lambda l: l.import_state == 'error').write({'import_state': 'staged', 'import_message': False})
 

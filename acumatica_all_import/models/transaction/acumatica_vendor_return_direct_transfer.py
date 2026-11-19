@@ -1,7 +1,7 @@
 import logging
 
 from odoo import models, fields, api
-from odoo.exceptions import UserError, ValidationError
+from odoo.exceptions import UserError
 from ...utils import acumatica_data as _data
 from ...utils.numeric import parse_float
 
@@ -306,9 +306,15 @@ class AcumaticaVendorReturnDirectTransferStaging(models.Model):
                         document_only=first.adt_DocumentOnly,
                     )
 
+                    product_by_code = self._acumatica_search_first_by(
+                        'product.product',
+                        'default_code',
+                        to_create_move_lines.mapped('adt_InventoryID'),
+                        domain=[('active', '=', True)],
+                    )
                     for line in to_create_move_lines:
                         # Cari data produk Odoo berdasarkan InventoryID Acumatica
-                        product = self._find_product_by_code(line.adt_InventoryID)
+                        product = product_by_code.get(line.adt_InventoryID)
                         if not product:
                             raise UserError(f"Product tidak ditemukan untuk InventoryID: {line.adt_InventoryID or '-'}")
 

@@ -3438,6 +3438,274 @@ class StockPicking(models.Model):
                     "pecahan transfer Pick dan Pack terkait terlebih dahulu:\n%s"
                 ) % transfer_names)
 
+    def _prepare_validate_picking(self):
+        """Run pre-validation checks grouped by the picking operation type."""
+        self.ensure_one()
+        if self.adt_is_document_only:
+            return
+
+        picking_type_name = self.picking_type_id.name or ''
+        if 'Pick' in picking_type_name:
+            # Pick and Pick Components share these checks before Odoo moves stock.
+            self._check_validate_requirements()
+            self._check_pick_quantity_vs_demand()
+            self._check_pick_confirmation_quantity()
+            self._apply_confirmation_qty_to_quantity_pick()
+        if picking_type_name == 'Pack':
+            self._check_pick_quantity_vs_demand()
+        if picking_type_name in ('Delivery Orders', 'Internal Transfer'):
+            self._check_validate_delivery_requirements()
+            self._apply_confirmation_qty_to_quantity_delivery()
+
+        self.update({
+            'adt_actual_qty': sum(self.move_ids.mapped('quantity'))
+        })
+
+        if picking_type_name in ('Pick', 'Pick Components', 'Pack', 'Delivery Orders'):
+            self._assign_status_ba()
+
+        if picking_type_name in ('Storage', 'Store Finished Product'):
+            # Storage validation depends on putaway, not picker status.
+            self._check_putaway_status_requirements()
+            self.move_line_ids._update_move_picked()
+        elif (
+            picking_type_name in ('Receipts', 'Receipt Internal')
+            and not self.is_ito_internal_transfer
+        ):
+            self._check_putaway_status_requirements()
+            self._check_picker_status_requirements()
+
+        if picking_type_name not in (
+            'Pick', 'Receipts', 'Receipt Internal', 'Storage', 'Store Finished Product'
+        ):
+            for move in self.move_ids:
+                for line in move.move_line_ids:
+                    line.write({
+                        'confirmation_location_code': str(line.location_id.unique_code or '').strip(),
+                        'confirmation_lot_code': str(line.lot_id.name or '').strip(),
+                        'matching': 'match',
+                    })
+
+    def _post_validate_picking_by_type(self, existing_backorder_ids):
+        """Apply downstream updates grouped by the validated document type."""
+        self.ensure_one()
+        if (
+            "Pick Components" in (self.picking_type_name or "")
+            and self.state == 'done'
+            and (self.backorder_id or self.backorder_ids)
+        ):
+            # Odoo copies picking fields when creating a backorder. Clear
+            # Qty Dipenuhi only on new Pick Components backorders.
+            if existing_backorder_ids is not None:
+                backorders = self.env['stock.picking'].search([
+                    ('backorder_id', '=', self.id),
+                ])
+                new_backorders = backorders.filtered(
+                    lambda backorder: backorder.id not in
+                    existing_backorder_ids
+                    and backorder.picking_type_id.name == 'Pick Components'
+                )
+                if new_backorders:
+                    new_backorders.write({'adt_actual_qty': 0.0})
+
+            # Raw material moves belong to the MO and may not have a
+            # picking_id. Keep the related moves to recover lot data from
+            # completed MO moves, but only add lines to active backorder
+            # moves. A zero-quantity line on a done move would make Odoo
+            related_component_moves = self.move_ids.move_dest_ids.filtered(
+                lambda move: bool(move.raw_material_production_id)
+            )
+            component_moves = related_component_moves.filtered(
+                lambda move: (
+                    move.raw_material_production_id.state not in ('done', 'cancel')
+                    and move.state not in ('done', 'cancel')
+                )
+            )
+            for move in component_moves:
+                finished_lines = move.move_line_ids.filtered(
+                    lambda line: line.mo_status == 'finished'
+                )
+                related_finished_lines = finished_lines | related_component_moves.filtered(
+                    lambda related_move: (
+                        related_move != move
+                        and related_move.product_id == move.product_id
+                        and move.raw_material_production_id.procurement_group_id
+                        and related_move.raw_material_production_id.procurement_group_id
+                        == move.raw_material_production_id.procurement_group_id
+                    )
+                ).move_line_ids.filtered(
+                    lambda line: line.mo_status == 'finished'
+                )
+                if not related_finished_lines:
+                    continue
+
+                working_lines = move.move_line_ids.filtered(
+                    lambda line: (
+                        line.state not in ('done', 'cancel')
+                        and line.mo_status != 'finished'
+                    )
+                )
+
+                source_moves = self.move_ids.filtered(
+                    lambda source_move: move in source_move.move_dest_ids
+                )
+                lot_values = {}
+                for source_line in source_moves.move_line_ids:
+                    lot_id = source_line.lot_id.id or False
+                    lot_name = source_line.lot_id.name or source_line.lot_name or False
+                    if lot_id or lot_name:
+                        lot_values[(lot_id, lot_name)] = True
+
+                # If the transfer line has no lot, preserve it from a
+                # finished line on this move or its related completed MO
+                # move, keeping the new line traceable.
+                if not lot_values:
+                    for finished_line in related_finished_lines:
+                        lot_id = finished_line.lot_id.id or False
+                        lot_name = finished_line.lot_id.name or finished_line.lot_name or False
+                        lot_values[(lot_id, lot_name)] = True
+
+                if not lot_values:
+                    lot_values[(False, False)] = True
+
+                for lot_id, lot_name in lot_values:
+                    matching_working_line = working_lines.filtered(
+                        lambda line: (
+                            line.lot_id.id == lot_id
+                            and (line.lot_id.name or line.lot_name or False) == lot_name
+                        )
+                    )
+                    if matching_working_line:
+                        continue
+                    line_vals = move._prepare_move_line_vals(quantity=0.0)
+                    line_vals.update({
+                        'quantity': 0.0,
+                        'lot_id': lot_id,
+                        'lot_name': lot_name,
+                        'mo_status': 'unfinished',
+                        'picked': False,
+                    })
+                    self.env['stock.move.line'].create(line_vals)
+
+        elif "Pick" in (self.picking_type_name or "") and "Components" not in (self.picking_type_name or ""):
+            next_pickings = self.move_ids.move_dest_ids.mapped("picking_id").filtered(
+                lambda picking: picking.picking_type_name == "Pack"
+            )
+            next_pickings.write({
+                'adt_actual_qty': 0.0,
+
+            })
+
+            for move in self.move_ids:
+                confirmation_qty = move.confirmation_quantity
+
+                for dest_move in move.move_dest_ids.filtered(
+                    lambda m: m.picking_id.picking_type_name == "Pack"
+                ):
+                    dest_move.write({
+                        'product_uom_qty': confirmation_qty,
+                    })
+
+        elif 'Pack' in (self.picking_type_name or ""):
+            next_pickings = self.move_ids.move_dest_ids.mapped("picking_id").filtered(
+                lambda picking: picking.picking_type_name == "Delivery Orders"
+            )
+            next_pickings.write({
+                'adt_actual_qty': 0.0
+            })
+
+            for move in self.move_ids:
+                for dest_move in move.move_dest_ids.filtered(
+                    lambda m: m.picking_id.picking_type_name == "Delivery Orders"
+                ):
+                    packaged_qty = sum(
+                        ml.quantity
+                        for ml in dest_move.move_line_ids
+                        if ml.package_id
+                    )
+
+                    dest_move.write({
+                        "unpack_quantity": dest_move.quantity - packaged_qty
+                    })
+
+        elif 'Delivery Orders' in (self.picking_type_name or ""):
+            for move in self.move_ids:
+                move._compute_remaining_package_qty()
+
+    def _post_validate_incoming_receipt(self, storage_pickings_by_origin):
+        """Update the linked Storage transfer after an incoming receipt."""
+        self.ensure_one()
+        if self.picking_type_id.code != "incoming":
+            return
+
+        self._check_putaway_quantity_vs_demand()
+
+        origin = self.origin or self.name
+        if origin not in storage_pickings_by_origin:
+            storage_pickings_by_origin[origin] = self.env["stock.picking"].search([
+                ("origin", "ilike", origin),
+                ("picking_type_id.code", "=", "internal"),
+            ], limit=1)
+        storage_pickings = storage_pickings_by_origin[origin]
+
+        total_qty = sum(self.move_ids.mapped('product_uom_qty'))
+
+        self.write({
+            'adt_total_qty': total_qty
+        })
+
+        storage_pickings.write({
+            "adt_dest_location_id": self.adt_dest_location_id,
+            "adt_type": self.adt_type,
+            "note" : self.note,
+        })
+
+        receipt_moves_by_product = {}
+        for receipt_move in self.move_ids:
+            receipt_moves_by_product.setdefault(
+                receipt_move.product_id.id,
+                receipt_move,
+            )
+
+        for storage in storage_pickings:
+            for storage_move in storage.move_ids:
+                receipt_move = receipt_moves_by_product.get(
+                    storage_move.product_id.id
+                )
+
+                if receipt_move:
+                    storage_move.write({
+                        "product_note": receipt_move.product_note,
+                    })
+
+    def _post_validate_over_receipts(self):
+        """Apply extra header updates for approved over-receipt validation."""
+        if self.env.context.get('over_receipt_update'):
+            completed_over_receipts = self.filtered(
+                lambda picking: picking.stock_lebih and picking.state == 'done'
+            )
+            for picking in completed_over_receipts:
+                ref_no = (picking.ref_sotr or '').strip()
+                vals = {}
+                if ref_no and picking.origin != ref_no:
+                    vals['origin'] = ref_no
+                if not picking.adt_type:
+                    transaction_type_labels = {
+                        'receipt_sotr': _('Receipt SOTR'),
+                        'inventory_receive': _('Inventory Receive'),
+                    }
+                    transaction_type_label = transaction_type_labels.get(
+                        picking.over_receipt_transaction_type
+                    )
+                    if transaction_type_label:
+                        vals['adt_type'] = transaction_type_label
+                if not picking.partner_id:
+                    warehouse_partner = picking._get_over_receipt_warehouse_partner()
+                    if warehouse_partner:
+                        vals['partner_id'] = warehouse_partner.id
+                if vals:
+                    picking.sudo().write(vals)
+
     def button_validate(self):
         # Validation performs internal writes on the picking (for example,
         # updating adt_actual_qty and the picking state). Keep those writes
@@ -3495,69 +3763,7 @@ class StockPicking(models.Model):
             picking._set_document_only_done_quantities()
 
         for picking in self:
-
-            if picking.adt_is_document_only:
-                continue
-            # Pick harus diblokir sebelum validasi standar Odoo memproses
-            # perpindahan stok apabila masih ada line yang belum Match.
-            if "Pick" in (picking.picking_type_id.name or ""):
-                picking._check_validate_requirements()
-                picking._check_pick_quantity_vs_demand()
-                picking._check_pick_confirmation_quantity()
-                picking._apply_confirmation_qty_to_quantity_pick()
-
-            if picking.picking_type_id.name in ('Pack'):
-                picking._check_pick_quantity_vs_demand()
-
-            if picking.picking_type_id.name in ('Delivery Orders', 'Internal Transfer'):
-                picking._check_validate_delivery_requirements()
-                picking._apply_confirmation_qty_to_quantity_delivery()
-
-             # update actual qty
-            picking.update({
-                'adt_actual_qty': sum(picking.move_ids.mapped('quantity'))
-            })
-
-            if picking.picking_type_id.name in ("Pick", "Pick Components", "Pack", "Delivery Orders"):
-                picking._assign_status_ba()
-
-
-
-            # Storage validation only depends on putaway completion. It does
-            # not use the receipt/picker status checks.
-            if picking.picking_type_id.name in ('Storage', 'Store Finished Product'):
-                picking._check_putaway_status_requirements()
-                # Refresh Odoo's picked quantity flag from the Storage
-                # putaway status before its standard backorder check runs.
-                picking.move_line_ids._update_move_picked()
-
-            if (
-                picking.picking_type_id.name in ('Receipts', 'Receipt Internal')
-                and not picking.is_ito_internal_transfer
-            ):
-                picking._check_putaway_status_requirements()
-                picking._check_picker_status_requirements()
-
-            if picking.picking_type_id.name not in ('Pick', 'Receipts', 'Receipt Internal', 'Storage', 'Store Finished Product'):
-                pass  # debug print removed for performance
-                # Lakukan perulangan untuk setiap stock.move yang ada di dalam picking
-                for move in picking.move_ids:
-                    # Jika move memiliki move_line_ids, lakukan update massal di level DB
-                    for line in move.move_line_ids:
-                        loc_code = str(line.location_id.unique_code or '').strip()
-                        product_code = str(line.lot_id.name or '').strip()
-                        vals = {
-                            'confirmation_location_code': loc_code,
-                            'confirmation_lot_code': product_code,
-                            'matching': 'match',
-                        }
-                        pass  # debug print removed for performance
-
-                        line.write(vals)
-
-                        pass  # debug print removed for performance
-
-                        pass  # debug print removed for performance
+            picking._prepare_validate_picking()
 
         for picking in self.filtered(
             lambda item: (
@@ -3587,22 +3793,20 @@ class StockPicking(models.Model):
 
         document_only_pickings._adt_preserve_document_only_destination()
 
+        storage_pickings_by_origin = {}
         for rec in self:
 
             is_document_only = rec.adt_is_document_only
             if is_document_only:
                 continue
-            pass  # debug print removed for performance
             is_receipt_putaway = (
                 rec.picking_type_id.name in ('Receipts', 'Receipt Internal', 'Storage', 'Store Finished Product')
                 and not rec.is_ito_internal_transfer
             )
             for line in rec.move_line_ids:
-                pass  # debug print removed for performance
                 if not is_receipt_putaway:
                     line.lot_name = line.lot_id.name if line.lot_id else line.lot_name
                 if not is_receipt_putaway and not line.lot_name:
-                    pass  # debug print removed for performance
                     raise UserError(_("Validation blocked.\n Lot not Found Please generate lot for all lines before validating the picking."))
 
             if is_receipt_putaway:
@@ -3612,14 +3816,11 @@ class StockPicking(models.Model):
             else:
                 rec._check_validate_requirements()
             operation_category = rec.picking_type_id.operation_category
-            pass  # debug print removed for performance
 
             # Hanya enforce untuk PUT dan DELIVERY
             if not is_receipt_putaway and operation_category in ['put', 'delivery']:
                 for line in rec.move_line_ids:
                     # Jika belum dicek (invisible), tidak dianggap ok
-                    pass  # debug print removed for performance
-                    pass  # debug print removed for performance
                     if line.matching != 'match':
                         raise UserError(_(
                             "Validation blocked.\n\n"
@@ -3630,148 +3831,9 @@ class StockPicking(models.Model):
                             "Silakan pastikan scan location dan/atau lot sudah benar."
                         ))
 
-            if (
-                "Pick Components" in (rec.picking_type_name or "")
-                and rec.state == 'done'
-                and (rec.backorder_id or rec.backorder_ids)
-            ):
-                # Odoo copies picking fields when creating a backorder. Clear
-                # Qty Dipenuhi only on new Pick Components backorders.
-                if rec.id in existing_pick_components_backorders:
-                    backorders = self.env['stock.picking'].search([
-                        ('backorder_id', '=', rec.id),
-                    ])
-                    new_backorders = backorders.filtered(
-                        lambda backorder: backorder.id not in
-                        existing_pick_components_backorders[rec.id]
-                        and backorder.picking_type_id.name == 'Pick Components'
-                    )
-                    if new_backorders:
-                        new_backorders.write({'adt_actual_qty': 0.0})
-
-                # Raw material moves belong to the MO and may not have a
-                # picking_id. Keep the related moves to recover lot data from
-                # completed MO moves, but only add lines to active backorder
-                # moves. A zero-quantity line on a done move would make Odoo
-                related_component_moves = rec.move_ids.move_dest_ids.filtered(
-                    lambda move: bool(move.raw_material_production_id)
-                )
-                component_moves = related_component_moves.filtered(
-                    lambda move: (
-                        move.raw_material_production_id.state not in ('done', 'cancel')
-                        and move.state not in ('done', 'cancel')
-                    )
-                )
-                for move in component_moves:
-                    finished_lines = move.move_line_ids.filtered(
-                        lambda line: line.mo_status == 'finished'
-                    )
-                    related_finished_lines = finished_lines | related_component_moves.filtered(
-                        lambda related_move: (
-                            related_move != move
-                            and related_move.product_id == move.product_id
-                            and move.raw_material_production_id.procurement_group_id
-                            and related_move.raw_material_production_id.procurement_group_id
-                            == move.raw_material_production_id.procurement_group_id
-                        )
-                    ).move_line_ids.filtered(
-                        lambda line: line.mo_status == 'finished'
-                    )
-                    if not related_finished_lines:
-                        continue
-
-                    working_lines = move.move_line_ids.filtered(
-                        lambda line: (
-                            line.state not in ('done', 'cancel')
-                            and line.mo_status != 'finished'
-                        )
-                    )
-
-                    source_moves = rec.move_ids.filtered(
-                        lambda source_move: move in source_move.move_dest_ids
-                    )
-                    lot_values = {}
-                    for source_line in source_moves.move_line_ids:
-                        lot_id = source_line.lot_id.id or False
-                        lot_name = source_line.lot_id.name or source_line.lot_name or False
-                        if lot_id or lot_name:
-                            lot_values[(lot_id, lot_name)] = True
-
-                    # If the transfer line has no lot, preserve it from a
-                    # finished line on this move or its related completed MO
-                    # move, keeping the new line traceable.
-                    if not lot_values:
-                        for finished_line in related_finished_lines:
-                            lot_id = finished_line.lot_id.id or False
-                            lot_name = finished_line.lot_id.name or finished_line.lot_name or False
-                            lot_values[(lot_id, lot_name)] = True
-
-                    if not lot_values:
-                        lot_values[(False, False)] = True
-
-                    for lot_id, lot_name in lot_values:
-                        matching_working_line = working_lines.filtered(
-                            lambda line: (
-                                line.lot_id.id == lot_id
-                                and (line.lot_id.name or line.lot_name or False) == lot_name
-                            )
-                        )
-                        if matching_working_line:
-                            continue
-                        line_vals = move._prepare_move_line_vals(quantity=0.0)
-                        line_vals.update({
-                            'quantity': 0.0,
-                            'lot_id': lot_id,
-                            'lot_name': lot_name,
-                            'mo_status': 'unfinished',
-                            'picked': False,
-                        })
-                        self.env['stock.move.line'].create(line_vals)
-
-            elif "Pick" in (rec.picking_type_name or "") and "Components" not in (rec.picking_type_name or ""):
-                next_pickings = rec.move_ids.move_dest_ids.mapped("picking_id").filtered(
-                    lambda picking: picking.picking_type_name == "Pack"
-                )
-                next_pickings.write({
-                    'adt_actual_qty': 0.0,
-
-                })
-
-                for move in rec.move_ids:
-                    confirmation_qty = move.confirmation_quantity
-
-                    for dest_move in move.move_dest_ids.filtered(
-                        lambda m: m.picking_id.picking_type_name == "Pack"
-                    ):
-                        dest_move.write({
-                            'product_uom_qty': confirmation_qty,
-                        })
-
-            elif 'Pack' in (rec.picking_type_name or ""):
-                next_pickings = rec.move_ids.move_dest_ids.mapped("picking_id").filtered(
-                    lambda picking: picking.picking_type_name == "Delivery Orders"
-                )
-                next_pickings.write({
-                    'adt_actual_qty': 0.0
-                })
-
-                for move in rec.move_ids:
-                    for dest_move in move.move_dest_ids.filtered(
-                        lambda m: m.picking_id.picking_type_name == "Delivery Orders"
-                    ):
-                        packaged_qty = sum(
-                            ml.quantity
-                            for ml in dest_move.move_line_ids
-                            if ml.package_id
-                        )
-
-                        dest_move.write({
-                            "unpack_quantity": dest_move.quantity - packaged_qty
-                        })
-
-            elif 'Delivery Orders' in (rec.picking_type_name or ""):
-                for move in rec.move_ids:
-                    move._compute_remaining_package_qty()
+            rec._post_validate_picking_by_type(
+                existing_pick_components_backorders.get(rec.id)
+            )
 
             if rec.picking_type_name in ['Delivery Orders'] and rec.adt_type in ['Sales Order Shipment', 'SO Shipment']:
                 rec.wms_state = 'waiting_response'
@@ -3793,65 +3855,9 @@ class StockPicking(models.Model):
 
                 rec.return_id.wms_state = "done"
 
-            pickings = self.env["stock.picking"].search([])
-            if rec.picking_type_id.code != "incoming":
-                continue
+            rec._post_validate_incoming_receipt(storage_pickings_by_origin)
 
-            rec._check_putaway_quantity_vs_demand()
-
-            storage_pickings = self.env["stock.picking"].search([
-                ("origin", "ilike", rec.origin or rec.name),
-                ("picking_type_id.code", "=", "internal"),
-            ], limit=1)
-
-            total_qty = sum(rec.move_ids.mapped('product_uom_qty'))
-
-            rec.write({
-                'adt_total_qty': total_qty
-            })
-
-            storage_pickings.write({
-                "adt_dest_location_id": rec.adt_dest_location_id,
-                "adt_type": rec.adt_type,
-                "note" : rec.note,
-            })
-
-            for storage in storage_pickings:
-                for storage_move in storage.move_ids:
-                    receipt_move = rec.move_ids.filtered(
-                        lambda m: m.product_id == storage_move.product_id
-                    )[:1]
-
-                    if receipt_move:
-                        storage_move.write({
-                            "product_note": receipt_move.product_note,
-                        })
-
-        if self.env.context.get('over_receipt_update'):
-            completed_over_receipts = self.filtered(
-                lambda picking: picking.stock_lebih and picking.state == 'done'
-            )
-            for picking in completed_over_receipts:
-                ref_no = (picking.ref_sotr or '').strip()
-                vals = {}
-                if ref_no and picking.origin != ref_no:
-                    vals['origin'] = ref_no
-                if not picking.adt_type:
-                    transaction_type_labels = {
-                        'receipt_sotr': _('Receipt SOTR'),
-                        'inventory_receive': _('Inventory Receive'),
-                    }
-                    transaction_type_label = transaction_type_labels.get(
-                        picking.over_receipt_transaction_type
-                    )
-                    if transaction_type_label:
-                        vals['adt_type'] = transaction_type_label
-                if not picking.partner_id:
-                    warehouse_partner = picking._get_over_receipt_warehouse_partner()
-                    if warehouse_partner:
-                        vals['partner_id'] = warehouse_partner.id
-                if vals:
-                    picking.sudo().write(vals)
+        self._post_validate_over_receipts()
 
         return res
 

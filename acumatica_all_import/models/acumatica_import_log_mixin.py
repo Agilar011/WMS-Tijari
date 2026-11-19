@@ -53,6 +53,46 @@ class AcumaticaImportLogMixin(models.AbstractModel):
             subtype_xmlid='mail.mt_note',
         )
 
+    def _acumatica_write_import_result_once(self, records, header, vals):
+        """Write a document result to its rows and post chatter only on its header."""
+        records = records.exists()
+        if not records:
+            return True
+
+        header = (records & header.exists())[:1] or records[:1]
+        detail_records = records - header
+        if detail_records:
+            detail_records.with_context(skip_acumatica_import_log=True).write(vals)
+        return header.with_context(skip_acumatica_import_log=False).write(vals)
+
+    def _acumatica_search_first_by(self, model_name, field_name, values, domain=None):
+        """Fetch matching records once, keeping the first record per field value."""
+        values = list(dict.fromkeys(value for value in values if value))
+        if not values:
+            return {}
+
+        model = self.env[model_name]
+        records = model.search((domain or []) + [(field_name, 'in', values)])
+        result = {}
+        for record in records:
+            value = record[field_name]
+            result.setdefault(value, record)
+        return result
+
+    def _acumatica_import_error_state(self, error_message):
+        """Classify source documents that cannot be updated after processing."""
+        rejected_terms = (
+            'tidak bisa diupdate',
+            'update digagalkan',
+            'sudah divalidasi',
+            'already processed',
+            'state ready',
+            'state done',
+            'state processed',
+        )
+        message = str(error_message or '').lower()
+        return 'rejected' if any(term in message for term in rejected_terms) else 'error'
+
     def write(self, vals):
         result = super().write(vals)
         if self.env.context.get('skip_acumatica_import_log'):

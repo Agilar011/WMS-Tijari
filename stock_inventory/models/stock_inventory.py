@@ -491,17 +491,8 @@ class InventoryAdjustmentsGroup(models.Model):
 
         staging_lines.write({'is_used': True})
 
-    def action_state_to_done(self):
-        self.ensure_one()
-        if not self.env.context.get("skip_inventory_operation_queue"):
-            return self._queue_inventory_operation("apply")
-        started_at = perf_counter()
-        _logger.info(
-            "Inventory adjustment apply id=%s name=%s phase=start",
-            self.id,
-            self.name,
-        )
-
+    def _get_inventory_quants_to_apply(self):
+        """Validate the adjustment and return counted and owned quants."""
         phase_started = perf_counter()
         self._check_inventory_adjustments_is_set()
         self._check_inventory_adjustments_doc()
@@ -516,9 +507,9 @@ class InventoryAdjustmentsGroup(models.Model):
             lambda quant: quant.current_inventory_id == self
         )
 
-        outdated_quants = stock_quant_ids.filtered("is_outdated")
+        outdated_quants = stock_quant_ids.filtered('is_outdated')
         if outdated_quants:
-            names = ", ".join(outdated_quants.mapped("product_id.display_name"))
+            names = ', '.join(outdated_quants.mapped('product_id.display_name'))
             raise UserError(self.env._(
                 "Some counted stock changed after the count and cannot be applied. "
                 "Recount these products first: %(products)s",
@@ -532,16 +523,15 @@ class InventoryAdjustmentsGroup(models.Model):
             len(stock_quant_ids),
             len(quants_to_clear),
         )
+        return stock_quant_ids, quants_to_clear
 
+    def _get_inventory_adjustment_lots(self, stock_quant_ids):
+        """Find existing lots required by counted quants in one query."""
         phase_started = perf_counter()
-        adjustment_date = fields.Datetime.to_datetime(self.date).strftime("%m%d%y")
-
-        # Build lot names up front and fetch any matching lots in one query.
-        # Quants for the same product/company (including different locations)
-        # must share one lot during this adjustment.
+        adjustment_date = fields.Datetime.to_datetime(self.date).strftime('%m%d%y')
         lotless_quants = stock_quant_ids.filtered(lambda quant: not quant.lot_id)
         lot_name_by_quant_id = {
-            quant.id: "{}-{}-{}".format(
+            quant.id: '{}-{}-{}'.format(
                 quant.product_id.default_code,
                 adjustment_date,
                 self.acumatica_ref_doc,
@@ -551,13 +541,13 @@ class InventoryAdjustmentsGroup(models.Model):
         lots_by_key = {}
         inventory_company_id = self.company_id.id
         if lotless_quants:
-            existing_lots = self.env["stock.lot"].search(
+            existing_lots = self.env['stock.lot'].search(
                 [
-                    ("product_id", "in", lotless_quants.product_id.ids),
-                    ("name", "in", list(set(lot_name_by_quant_id.values()))),
-                    ("company_id", "in", [inventory_company_id, False]),
+                    ('product_id', 'in', lotless_quants.product_id.ids),
+                    ('name', 'in', list(set(lot_name_by_quant_id.values()))),
+                    ('company_id', 'in', [inventory_company_id, False]),
                 ],
-                order="company_id desc, id",
+                order='company_id desc, id',
             )
             for lot in existing_lots:
                 key = (lot.product_id.id, lot.name, lot.company_id.id)
@@ -570,9 +560,12 @@ class InventoryAdjustmentsGroup(models.Model):
             len(lotless_quants),
             len(lots_by_key),
         )
+        return lotless_quants, lot_name_by_quant_id, lots_by_key, inventory_company_id
 
-        # Collect missing lots by product/name first. Multiple location quants
-        # for the same product share a single lot for this adjustment.
+    def _create_missing_inventory_adjustment_lots(
+        self, lotless_quants, lot_name_by_quant_id, lots_by_key, inventory_company_id
+    ):
+        """Create each missing product/lot/company combination once."""
         phase_started = perf_counter()
         missing_lot_vals = {}
         for quant in lotless_quants:
@@ -581,11 +574,10 @@ class InventoryAdjustmentsGroup(models.Model):
             shared_lot_key = (quant.product_id.id, lot_name, False)
             if not lots_by_key.get(lot_key) and not lots_by_key.get(shared_lot_key):
                 missing_lot_vals.setdefault(lot_key, {
-                    "name": lot_name,
-                    "product_id": quant.product_id.id,
-                    "company_id": inventory_company_id,
+                    'name': lot_name,
+                    'product_id': quant.product_id.id,
+                    'company_id': inventory_company_id,
                 })
-
         _logger.info(
             "Inventory adjustment apply id=%s phase=resolve_lots elapsed=%.3fs "
             "lotless_quants=%s existing_lots=%s missing_lots=%s",
@@ -598,7 +590,7 @@ class InventoryAdjustmentsGroup(models.Model):
 
         phase_started = perf_counter()
         if missing_lot_vals:
-            created_lots = self.env["stock.lot"].create(list(missing_lot_vals.values()))
+            created_lots = self.env['stock.lot'].create(list(missing_lot_vals.values()))
             for lot in created_lots:
                 lots_by_key[(lot.product_id.id, lot.name, lot.company_id.id)] = lot
         _logger.info(
@@ -608,7 +600,12 @@ class InventoryAdjustmentsGroup(models.Model):
             perf_counter() - phase_started,
             len(missing_lot_vals),
         )
+        return lots_by_key
 
+    def _assign_inventory_adjustment_lots(
+        self, lotless_quants, lot_name_by_quant_id, lots_by_key, inventory_company_id
+    ):
+        """Assign each lotless quant to its matching shared lot."""
         quant_ids_by_lot = {}
         for quant in lotless_quants:
             lot_name = lot_name_by_quant_id[quant.id]
@@ -619,9 +616,9 @@ class InventoryAdjustmentsGroup(models.Model):
                 quant_ids_by_lot.setdefault(lot.id, []).append(quant.id)
 
         phase_started = perf_counter()
-        Quant = self.env["stock.quant"]
+        Quant = self.env['stock.quant']
         for lot_id, quant_ids in quant_ids_by_lot.items():
-            Quant.browse(quant_ids).write({"lot_id": lot_id})
+            Quant.browse(quant_ids).write({'lot_id': lot_id})
         _logger.info(
             "Inventory adjustment apply id=%s phase=assign_lots elapsed=%.3fs "
             "quant_count=%s lot_count=%s",
@@ -631,6 +628,8 @@ class InventoryAdjustmentsGroup(models.Model):
             len(quant_ids_by_lot),
         )
 
+    def _apply_inventory_adjustment_quants(self, stock_quant_ids):
+        """Apply counted quantities through Odoo's standard inventory action."""
         phase_started = perf_counter()
         result = stock_quant_ids.with_context(
             set_inventory_quantity_auto_apply=True,
@@ -649,31 +648,33 @@ class InventoryAdjustmentsGroup(models.Model):
             len(stock_quant_ids),
         )
 
-        phase_started = perf_counter()
         remaining_quants = stock_quant_ids.filtered(
             lambda quant: quant.inventory_diff_quantity != 0
         )
         if remaining_quants:
-            names = ", ".join(remaining_quants.mapped("product_id.display_name"))
+            names = ', '.join(remaining_quants.mapped('product_id.display_name'))
             raise UserError(self.env._(
                 "Some inventory differences remain unapplied: %(products)s",
                 products=names,
             ))
 
+    def _cleanup_completed_inventory_adjustment(self, quants_to_clear):
+        """Remove stale move links and clear adjustment ownership from quants."""
+        phase_started = perf_counter()
         # Inventory adjustment moves are completed immediately by Odoo.
         # Remove stale links left by earlier matching logic that could attach
         # an unrelated or still-open move line to this adjustment.
         invalid_move_lines = self.stock_move_ids.filtered(
-            lambda line: line.state != "done" or not line.move_id.is_inventory
+            lambda line: line.state != 'done' or not line.move_id.is_inventory
         )
-        invalid_move_lines.write({"inventory_adjustment_id": False})
+        invalid_move_lines.write({'inventory_adjustment_id': False})
 
-        self.state = "done"
+        self.state = 'done'
         quants_to_clear.write({
-            "to_do": False,
-            "user_id": False,
-            "inventory_date": False,
-            "current_inventory_id": False,
+            'to_do': False,
+            'user_id': False,
+            'inventory_date': False,
+            'current_inventory_id': False,
         })
         _logger.info(
             "Inventory adjustment apply id=%s phase=verify_and_cleanup elapsed=%.3fs "
@@ -683,6 +684,38 @@ class InventoryAdjustmentsGroup(models.Model):
             len(invalid_move_lines),
             len(quants_to_clear),
         )
+
+    def action_state_to_done(self):
+        self.ensure_one()
+        if not self.env.context.get('skip_inventory_operation_queue'):
+            return self._queue_inventory_operation('apply')
+
+        started_at = perf_counter()
+        _logger.info(
+            "Inventory adjustment apply id=%s name=%s phase=start",
+            self.id,
+            self.name,
+        )
+
+        stock_quant_ids, quants_to_clear = self._get_inventory_quants_to_apply()
+        lotless_quants, lot_name_by_quant_id, lots_by_key, inventory_company_id = (
+            self._get_inventory_adjustment_lots(stock_quant_ids)
+        )
+        lots_by_key = self._create_missing_inventory_adjustment_lots(
+            lotless_quants,
+            lot_name_by_quant_id,
+            lots_by_key,
+            inventory_company_id,
+        )
+        self._assign_inventory_adjustment_lots(
+            lotless_quants,
+            lot_name_by_quant_id,
+            lots_by_key,
+            inventory_company_id,
+        )
+        self._apply_inventory_adjustment_quants(stock_quant_ids)
+        self._cleanup_completed_inventory_adjustment(quants_to_clear)
+
         _logger.info(
             "Inventory adjustment apply id=%s name=%s phase=complete total=%.3fs",
             self.id,
@@ -690,9 +723,9 @@ class InventoryAdjustmentsGroup(models.Model):
             perf_counter() - started_at,
         )
         return {
-                    "type": "ir.actions.client",
-                    "tag": "reload",
-                }
+            'type': 'ir.actions.client',
+            'tag': 'reload',
+        }
 
     def action_auto_state_to_done(self):
         self.ensure_one()
