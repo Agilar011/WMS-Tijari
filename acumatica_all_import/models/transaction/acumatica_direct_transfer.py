@@ -1,7 +1,7 @@
 import logging
 
-from odoo import models, fields, api
-from odoo.exceptions import UserError, ValidationError
+from odoo import models, fields
+from odoo.exceptions import UserError
 from ...utils import acumatica_data as _data
 from ...utils.numeric import parse_float
 
@@ -237,8 +237,14 @@ class AcumaticaDirectTransferStaging(models.Model):
                         ),
                     })
 
+                    product_by_code = self._acumatica_search_first_by(
+                        'product.product',
+                        'default_code',
+                        to_create_move_lines.mapped('adt_InventoryID'),
+                        domain=[('active', '=', True)],
+                    )
                     for line in to_create_move_lines:
-                        product = self._find_product_by_code(line.adt_InventoryID)
+                        product = product_by_code.get(line.adt_InventoryID)
                         if not product:
                             raise UserError(
                                 f'Product tidak ditemukan untuk InventoryID: '
@@ -385,192 +391,6 @@ class AcumaticaDirectTransferStaging(models.Model):
             'error': error,
         }
 
-    def _do_import_legacy_picking(self):
-        """Fungsi utama eksekusi pembuatan dokumen Stock Picking & Stock Move"""
-        Picking = self.env['stock.picking']
-        Move = self.env['stock.move']
-
-        imported = 0
-        updated = 0
-        error = 0
-
-        # Ambil daftar unik reference number agar tidak memproses dokumen yang sama berulang kali
-        for reference_nbr in self.mapped('adt_ReferenceNbr'):
-            receipt_lines = self.filtered(
-                lambda l: l.adt_ReferenceNbr == reference_nbr and l.import_state in ['staged', 'error']
-            )
-            if not receipt_lines:
-                continue
-
-            # Karena model bertipe multi-recordset, ambil baris header pertamanya secara aman
-            first = receipt_lines[0]
-            origin = first.adt_ReferenceNbr or False
-
-            # Ambil seluruh baris data item (Lines) yang berelasi dengan header ini
-            to_create_move_lines = first.line_ids
-
-
-            try:
-                # 1. PROTEKSI UTAMA (SAVEPOINT PER DOKUMEN): 
-                # Jika lines bermasalah, pembuatan picking otomatis dibatalkan bersih (Rollback)
-                with self.env.cr.savepoint():
-
-                    # Tentukan jenis operasi picking (Operation Type)
-                    picking_type = first._adt_reresolve_picking_type()
-                    if not picking_type:
-                        raise UserError(f"Picking type (Operation Type) belum diatur pada header staging ID {first.id}.")
-
-                    # Cari master data gudang asal (FromWarehouseID)
-                    warehouse_src = self._find_warehouse_by_code(first.adt_FromWarehouseID)
-                    if not warehouse_src:
-                        raise UserError(f"Gudang asal tidak ditemukan untuk code: {first.adt_FromWarehouseID or '-'}")
-
-                    # Cari master data gudang tujuan (ToWarehouseID)
-                    warehouse_dest = self._find_warehouse_by_code(first.adt_ToWarehouseID)
-                    if not warehouse_dest:
-                        raise UserError(f"Gudang tujuan tidak ditemukan untuk code: {first.adt_ToWarehouseID or '-'}")
-
-                    source_location = warehouse_src.lot_stock_id or picking_type.default_location_src_id
-                    dest_location = warehouse_dest.lot_stock_id
-                    if not source_location:
-                        raise UserError(f"Lokasi asal tidak ditemukan untuk code: {first.adt_FromWarehouseID or '-'}")
-                    if not dest_location:
-                        raise UserError(f"Lokasi tujuan tidak ditemukan untuk code: {first.adt_ToWarehouseID or '-'}")
-                    if dest_location.usage == 'customer':
-                        raise UserError("Lokasi tujuan customer hanya boleh dipakai oleh SO Shipment.")
-
-                    # Definisikan dictionary payload data stock.picking Odoo
-                    vals = {
-                        'picking_type_id': picking_type.id,
-                        'location_id': source_location.id,
-                        'location_dest_id': dest_location.id,
-                        'scheduled_date': _data.acumatica_datetime(first.adt_Date),
-                        'origin': origin,
-                        'note': first.adt_note or False,
-                        
-                        # Sinkronisasi Field Kustom ke Tabel stock.picking (jika kolomnya eksis)
-                        'adt_receipt_nbr': origin,
-                        'adt_branch_warehouse': first.adt_PostPeriod or False,
-                        'adt_acumatica_write_date': _data.acumatica_datetime(first.adt_LastModifiedDateTime),
-                        'adt_status': first.adt_Status or False,
-                        # 'adt_type': first.adt_Type or False,
-                        'adt_external_id': first.adt_id or False,
-                    }
-
-                    # Filter field agar steril dari KeyError field kustom yang tidak terdaftar di stock.picking
-                    vals = {k: v for k, v in vals.items() if k in Picking._fields}
-
-                    # Cek pencegahan duplikasi (Dedup Dokumen via Origin)
-                    picking = Picking.search([('origin', '=', origin)], limit=1)
-                    is_new_picking = False
-
-                    if picking:
-                        if picking.state != 'draft':
-                            raise UserError(f"Dokumen {origin} sudah divalidasi di Odoo (State: {picking.state}), update digagalkan.")
-                        picking.write(vals)
-                        action_state = 'updated'
-                        self.env['acumatica.error.transaction']._handle_acumatica_update(first, origin=origin)
-                    else:
-                        picking = Picking.sudo().create(vals)
-                        is_new_picking = True
-                        action_state = 'created'
-
-                    if action_state == 'updated':
-                        picking.move_ids.unlink()
-
-                    # ---------------------------------------------------------
-                    # BULK CREATION STOCK MOVES (DETAIL LINES)
-                    # ---------------------------------------------------------
-                    moves_to_create = []
-
-                    for line in to_create_move_lines:
-                        # Cari data produk Odoo berdasarkan InventoryID Acumatica
-                        product = self._find_product_by_code(line.adt_InventoryID)
-                        if not product:
-                            raise UserError(f"Product tidak ditemukan untuk InventoryID: {line.adt_InventoryID or '-'}")
-
-                        # Cari data satuan (UOM)
-                        # uom = self._find_uom_by_name(line.adt_UOM, product)
-                        qty = self._parse_float(line.adt_Quantity)
-
-                        # Tentukan lokasi detail per baris barang secara spesifik (jika ada)
-                        line_loc_src = picking.location_id
-                        line_loc_dest = picking.location_dest_id
-
-                        # Bangun dictionary baris barang tunggal
-                        single_move_vals = {
-                            'name': line.adt_Description or product.display_name,
-                            'picking_id': picking.id,
-                            'product_id': product.id,
-                            'product_uom_qty': qty,
-                            'product_uom': product.uom_id.id,
-                            'location_id': line_loc_src.id,
-                            'location_dest_id': line_loc_dest.id,
-                            # 'description_picking': product.name or False,
-                            
-                            # Custom tracking audit trail
-                            'adt_line_external_id': line.adt_id or False,
-                            'adt_inventory_id': line.adt_InventoryID or False,
-                            'adt_line_nbr': line.adt_rowNumber or False,
-                            'adt_open_qty': qty,
-                            'adt_order_qty': qty,
-                            'adt_uom_code': line.adt_UOM or False,
-                        }
-
-                        # Sterilkan data dari Invalid Field khusus stock.move
-                        single_move_vals = {k: v for k, v in single_move_vals.items() if k in Move._fields}
-                        moves_to_create.append(single_move_vals)
-
-                    # Eksekusi pembuatan seluruh Stock Moves secara massal di luar perulangan
-                    if moves_to_create:
-                        Move.create(moves_to_create)
-
-                    if first.adt_DocumentOnly:
-                        picking.action_validate_document_only_import(force=True)
-
-                    # Kunci status dokumen jika seluruh perulangan sukses terlewati tanpa hambatan
-                    first.write({
-                        'import_state': action_state,
-                        'import_message': f'Sukses diproses ke Odoo ({picking.name})',
-                        'odoo_picking_id': picking.id,
-                    })
-                    self.env['acumatica.error.transaction']._handle_acumatica_error(reference_nbr, 'direct_transfer')
-
-                    if is_new_picking:
-                        imported += 1
-                    else:
-                        updated += 1
-
-            except Exception as e:
-                _logger.exception('Direct Transfer import failed for document %s.', reference_nbr or '-')
-                # 2. STRATEGI PENANGANAN JIKA DOKUMEN ERROR:
-                # Savepoint di atas membatalkan picking/move dokumen yang gagal.
-                error += 1
-                self.env['acumatica.error.transaction']._handle_acumatica_error(
-                    first,
-                    [str(e)],
-                    api_acumatica='direct_transfer',
-                    operation_type='internal',
-                    origin=reference_nbr,
-                    location=first.adt_FromWarehouseID or False,
-                    location_dest=first.adt_ToWarehouseID or False,
-                    scheduled_date=first.adt_Date,
-                    payload={'header': first.read()[0] if first.exists() else {}},
-                    line_payloads=[{
-                        'inventory_id': line.adt_InventoryID or False,
-                        'product_name': line.adt_Description or False,
-                        'qty': self._parse_float(line.adt_Quantity),
-                        'uom': line.adt_UOM or False,
-                        'payload': line.read()[0] if line.exists() else {},
-                    } for line in to_create_move_lines],
-                )
-                # Tulis pesan kegagalan ke UI Odoo agar user tahu detail masalahnya
-                first.write({
-                    'import_state': 'error',
-                    'import_message': str(e),
-                    'odoo_picking_id': False,
-                })
-                
     def _find_warehouse_by_code(self, code):
         Warehouse = self.env['stock.location.acumatica']
         warehouse = False

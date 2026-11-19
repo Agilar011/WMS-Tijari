@@ -2,7 +2,6 @@ import logging
 
 from odoo import api, fields, models
 from odoo.exceptions import UserError
-import requests
 from ...utils import acumatica_data as _data
 from ...utils.numeric import parse_float
 
@@ -163,30 +162,6 @@ class AcumaticaTransferShipmentLine(models.Model):
             line_payloads=line_payloads,
         )
     
-    def _find_location2(self, code):
-        Warehouse = self.env['stock.location.acumatica']
-        warehouse = False
-        if code.location_dest_code:
-            warehouse = Warehouse.search([('code', '=', code.location_dest_code), ('is_active', '=', True)], limit=1)
-            if warehouse:
-                if not warehouse.odoo_building_id:
-                    warehouse = False
-                else:
-                    warehouse = warehouse.odoo_building_id
-
-        return warehouse
-
-
-        Location = self.env['stock.location']
-        location = False
-        if code:
-            location = Location.search([('complete_name', '=', code)], limit=1)
-            if not location:
-                location = Location.search([('name', '=', code)], limit=1)
-        if not location and warehouse and hasattr(warehouse, fallback_field):
-            location = getattr(warehouse, fallback_field)
-        return location
-
     def _find_uom(self, line, product):
         Uom = self.env['uom.uom']
         uom = False
@@ -400,10 +375,18 @@ class AcumaticaTransferShipmentLine(models.Model):
                     user_message=f"Transfer Shipment {origin or '-'} tidak dapat diperbarui karena proses sebelumnya sudah berjalan. Periksa status transfer terkait di WMS."
                 )
 
+            product_by_code = shipment._acumatica_search_first_by(
+                'product.product',
+                'default_code',
+                shipment.shipment_line_ids.mapped('inventory_id'),
+            )
+            uom_by_name = shipment._acumatica_search_first_by(
+                'uom.uom', 'name', shipment.shipment_line_ids.mapped('uom_code'),
+            )
             for shipment_line in shipment.shipment_line_ids:
                 move_vals = {}
                 try:
-                    product = shipment._find_product(shipment_line)
+                    product = product_by_code.get(shipment_line.inventory_id)
                     if not product:
                         error_messages.append(
                             f'Product with InventoryID {shipment_line.inventory_id} was not found in the WMS | MASTER PRODUCT.'
@@ -411,7 +394,7 @@ class AcumaticaTransferShipmentLine(models.Model):
                         user_messages.append(f"Produk dengan kode {shipment_line.inventory_id or '-'} pada baris {shipment_line.line_nbr or '-'} belum terdaftar. Periksa master produk di WMS.")
                         continue
 
-                    uom = shipment._find_uom(shipment_line, product)
+                    uom = uom_by_name.get(shipment_line.uom_code) or product.uom_id
                     if not uom:
                         error_messages.append(
                             f'UOM with InventoryID {shipment_line.inventory_id} was not found in the WMS | MASTER UOM.'
@@ -572,10 +555,18 @@ class AcumaticaTransferShipmentLine(models.Model):
         if action_state == 'updated':
             picking.move_ids.unlink()
 
+        product_by_code = shipment._acumatica_search_first_by(
+            'product.product',
+            'default_code',
+            shipment.shipment_line_ids.mapped('inventory_id'),
+        )
+        uom_by_name = shipment._acumatica_search_first_by(
+            'uom.uom', 'name', shipment.shipment_line_ids.mapped('uom_code'),
+        )
         for shipment_line in shipment.shipment_line_ids:
             move_vals = {}
             try:
-                product = shipment._find_product(shipment_line)
+                product = product_by_code.get(shipment_line.inventory_id)
                 if not product:
                     error_messages.append(
                         f'Product with InventoryID {shipment_line.inventory_id} was not found in the WMS | MASTER PRODUCT.'
@@ -583,7 +574,7 @@ class AcumaticaTransferShipmentLine(models.Model):
                     user_messages.append(f"Produk dengan kode {shipment_line.inventory_id or '-'} pada baris {shipment_line.line_nbr or '-'} belum terdaftar. Periksa master produk di WMS.")
                     continue
 
-                uom = shipment._find_uom(shipment_line, product)
+                uom = uom_by_name.get(shipment_line.uom_code) or product.uom_id
                 if not uom:
                     error_messages.append(
                         f'UOM with InventoryID {shipment_line.inventory_id} was not found in the WMS | MASTER UOM.'
@@ -747,7 +738,7 @@ class AcumaticaTransferShipmentLine(models.Model):
                     )
 
                 shipment.write({
-                    'import_state': 'rejected' if any(term in (locals().get('error_message') or str(locals().get('e') or locals().get('line_e') or '')).lower() for term in ('tidak bisa diupdate', 'update digagalkan', 'sudah divalidasi', 'already processed', 'state ready', 'state done', 'state processed')) else 'error',
+                    'import_state': self._acumatica_import_error_state(error_message),
                     'import_message': error_message[:1000],
                 })
                 error += 1
@@ -758,7 +749,6 @@ class AcumaticaTransferShipmentLine(models.Model):
                         event_type='error', message=user_message,
                     )
 
-        msg = f'Generate done: {created} transfer shipment created, {updated} transfer shipment updated, {error} transfer shipment error.'
         # Notifikasi dimatikan agar form staging tidak freeze/tidak realtime.
         # return {
         #     'type': 'ir.actions.client',

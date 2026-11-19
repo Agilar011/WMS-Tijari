@@ -1,7 +1,6 @@
 from odoo import models, fields, api
 from odoo.exceptions import UserError
 import logging
-import requests
 from ...utils import acumatica_data as _data
 
 
@@ -300,6 +299,23 @@ class AcumaticaReceiptLine(models.Model):
                 'payload': receipt_line.read()[0] if receipt_line.exists() else {},
             })
 
+        receipt_lines = receipt.product_line_ids
+        products_by_code = self._acumatica_search_first_by(
+            'product.product',
+            'default_code',
+            receipt_lines.mapped('inventory_id'),
+        )
+        uoms_by_name = self._acumatica_search_first_by(
+            'uom.uom',
+            'name',
+            receipt_lines.mapped('uom_code'),
+        )
+        locations_by_code = self._acumatica_search_first_by(
+            'stock.location.acumatica',
+            'code',
+            [receipt.warehouse_code, *receipt_lines.mapped('warehouse_dest_code')],
+        )
+
         vendor = receipt._find_vendor(receipt)
         if not vendor:
             error_messages.append(
@@ -320,7 +336,8 @@ class AcumaticaReceiptLine(models.Model):
                 "belum ditemukan atau tidak aktif. Periksa mapping warehouse di WMS."
             )
 
-        dest_location = receipt._find_location_dest(receipt.warehouse_code)
+        dest_mapping = locations_by_code.get(receipt.warehouse_code)
+        dest_location = dest_mapping.odoo_location_id if dest_mapping else False
         if not dest_location:
             error_messages.append(
                 f'Location with code {receipt.warehouse_code} was not found or inactive in the WMS | WMS Dependency : MAPPING WAREHOUSE.'
@@ -420,7 +437,7 @@ class AcumaticaReceiptLine(models.Model):
         for receipt_line in receipt.product_line_ids:
             move_vals = {}
             try:
-                product = receipt._find_product(receipt_line)
+                product = products_by_code.get(receipt_line.inventory_id)
                 if not product:
                     error_messages.append(
                         f'Product with InventoryID {receipt_line.inventory_id} was not found in the WMS | MASTER PRODUCT.'
@@ -438,7 +455,7 @@ class AcumaticaReceiptLine(models.Model):
                     # })
                     continue
 
-                uom = receipt._find_uom(receipt_line, product)
+                uom = uoms_by_name.get(receipt_line.uom_code) or product.uom_id
                 if product and not uom:
                     error_messages.append(
                         f'UOM with InventoryID {receipt_line.inventory_id} was not found in the WMS | MASTER UOM.'
@@ -453,7 +470,8 @@ class AcumaticaReceiptLine(models.Model):
                     continue
 
                 dest_code = receipt_line.warehouse_dest_code
-                dest_move_location = receipt._find_location_dest(dest_code)
+                dest_mapping = locations_by_code.get(dest_code)
+                dest_move_location = dest_mapping.odoo_location_id if dest_mapping else False
                 if not dest_move_location:
                     error_messages.append(
                         f'Location with code {receipt_line.warehouse_dest_code} was not found or inactive in the WMS | WMS Dependency : MAPPING WAREHOUSE.'
@@ -658,7 +676,7 @@ class AcumaticaReceiptLine(models.Model):
                     )
 
                 receipt.write({
-                    'import_state': 'rejected' if any(term in (locals().get('error_message') or str(locals().get('e') or locals().get('line_e') or '')).lower() for term in ('tidak bisa diupdate', 'update digagalkan', 'sudah divalidasi', 'already processed', 'state ready', 'state done', 'state processed')) else 'error',
+                    'import_state': self._acumatica_import_error_state(error_message),
                     'import_message': error_message[:1000],
                 })
                 error += 1
@@ -672,7 +690,6 @@ class AcumaticaReceiptLine(models.Model):
                     )
                 continue
 
-        msg = f'Generate done: {created} receipt created, {updated} receipt updated, {error} receipt error.'
         # Notifikasi dimatikan agar form staging tidak freeze/tidak realtime.
         # return {
         #     'type': 'ir.actions.client',

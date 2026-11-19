@@ -1,6 +1,4 @@
 import logging
-import requests
-import logging
 
 from odoo import models, fields, api
 from odoo.exceptions import UserError
@@ -424,23 +422,53 @@ class AcumaticaInvoiceConsignment(models.Model):
                         action_state = 'created'
 
                     to_create_move = invoice_lines
-
-
-                    # Inisialisasi list kosong sebelum loop lines dimulai
                     moves_to_create = []
                     update_line_snapshots = []
-                    products_by_key = {}
-
-
-                    # PERULANGAN LINES
+                    first_line_by_product_key = {}
                     for line in to_create_move:
                         product_key = (
                             ('inventory', line.adt_InventoryID)
                             if line.adt_InventoryID else
                             ('description', line.adt_TransactionDescription)
                         )
-                        if product_key not in products_by_key:
-                            products_by_key[product_key] = self._find_product(line)
+                        first_line_by_product_key.setdefault(product_key, line)
+
+                    product_codes = [
+                        line.adt_InventoryID for line in first_line_by_product_key.values()
+                    ]
+                    product_names = [
+                        line.adt_TransactionDescription
+                        for line in first_line_by_product_key.values()
+                    ]
+                    products_by_code = self._acumatica_search_first_by(
+                        'product.product', 'default_code', product_codes
+                    )
+                    products_by_barcode = self._acumatica_search_first_by(
+                        'product.product', 'barcode', product_codes
+                    )
+                    products_by_name = self._acumatica_search_first_by(
+                        'product.product', 'name', product_names
+                    )
+                    uoms_by_name = self._acumatica_search_first_by(
+                        'uom.uom', 'name', to_create_move.mapped('adt_UOM')
+                    )
+                    consignment_locations = {warehouse_code: source_location}
+
+                    products_by_key = {}
+                    for product_key, line in first_line_by_product_key.items():
+                        product = (
+                            products_by_code.get(line.adt_InventoryID)
+                            or products_by_barcode.get(line.adt_InventoryID)
+                            or products_by_name.get(line.adt_TransactionDescription)
+                        )
+                        products_by_key[product_key] = product
+
+                    for line in to_create_move:
+                        product_key = (
+                            ('inventory', line.adt_InventoryID)
+                            if line.adt_InventoryID else
+                            ('description', line.adt_TransactionDescription)
+                        )
                         product = products_by_key[product_key]
                         if not product:
                             # Jika produk tidak ketemu, raise error ini akan membatalkan (rollback) pembuatan picking!
@@ -448,11 +476,14 @@ class AcumaticaInvoiceConsignment(models.Model):
                                 f'Product tidak ditemukan untuk InventoryID: {line.adt_InventoryID or "-"}'
                             )
 
-                        uom = self._find_uom(line, product)
+                        uom = uoms_by_name.get(line.adt_UOM) or product.uom_id
                         qty = self._parse_int(line.adt_Qty)
 
-                        # Buat dictionary data untuk satu baris barang
-                        line_source_location = self._find_consignment_location(line.adt_Warehouse)
+                        if line.adt_Warehouse not in consignment_locations:
+                            consignment_locations[line.adt_Warehouse] = (
+                                self._find_consignment_location(line.adt_Warehouse)
+                            )
+                        line_source_location = consignment_locations[line.adt_Warehouse]
                         if not line_source_location:
                             raise UserError(
                                 f'Location CONS tidak ditemukan untuk warehouse '
@@ -572,7 +603,7 @@ class AcumaticaInvoiceConsignment(models.Model):
                 staging = self.env['acumatica.invoice.consignment.staging'].browse(first_id).exists()
                 if staging:
                     staging.write({
-                        'import_state': 'rejected' if any(term in (locals().get('error_message') or str(locals().get('e') or locals().get('line_e') or '')).lower() for term in ('tidak bisa diupdate', 'update digagalkan', 'sudah divalidasi', 'already processed', 'state ready', 'state done', 'state processed')) else 'error',
+                        'import_state': self._acumatica_import_error_state(str(e)),
                         'import_message': str(e),
                         'odoo_picking_id': False,
                     })
@@ -587,7 +618,6 @@ class AcumaticaInvoiceConsignment(models.Model):
                         error=str(e), error_type='unexpected',
                     )
 
-        msg = f'Generate done: {created} invoice consignment created, {updated} invoice consignment updated, {error} invoice consignment error.'
         _logger.info(
             'Invoice Consignment import finished: created=%s, updated=%s, errors=%s.',
             created, updated, error,
