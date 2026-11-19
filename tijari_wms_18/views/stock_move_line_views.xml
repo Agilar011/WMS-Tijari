@@ -182,6 +182,11 @@
         <field name="inherit_id" ref="stock.view_stock_move_line_detailed_operation_tree"/>
         <field name="arch" type="xml">
 
+            <xpath expr="//list/field[@name='move_id']" position="attributes">
+                <attribute name="column_invisible">False</attribute>
+                <attribute name="optional">hide</attribute>
+            </xpath>
+
             <xpath expr="//list/field[1]" position="before">
                 <header>
                     <button name="action_generate_selected_lot"
@@ -190,6 +195,10 @@
                         class="btn-warning"
                         invisible="context.get('picking_type_name') not in ['Receipts', 'Direct Receipt']"/>
                 </header>
+            </xpath>
+
+            <xpath expr="//field[@name='location_dest_id']" position="attributes">
+                <attribute name="context">{'show_location_short_name': True}</attribute>
             </xpath>
 
             <xpath expr="//field[@name='location_dest_id']" position="after">
