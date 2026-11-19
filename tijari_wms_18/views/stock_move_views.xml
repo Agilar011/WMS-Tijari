@@ -3020,6 +3020,7 @@
                 </field>
                 <field name="putaway_display_move_line_ids"
                     mode="list,kanban" 
+                    options="{'create': False, 'delete': False, 'link': False, 'unlink': False}"
                     domain="['&amp;', '&amp;', '&amp;', '&amp;', ('quantity', '&gt;', 0), ('state', '!=', 'cancel'), '|', ('picking_id.picking_type_id.name', 'not in', ['Receipts', 'Receipt Internal']), ('picker_status', '=', 'finished'), '|', ('picker_status', '=', 'finished'), ('confirmation_quantity', '&gt;', 0), '|', ('lot_id', '!=', False), ('lot_name', '!=', False)]"
                     context="{
                         'form_view_ref': 'tijari_wms_18.view_move_line_form_inherit_tijari'

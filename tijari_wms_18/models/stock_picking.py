@@ -846,31 +846,31 @@ class StockPicking(models.Model):
                     and not picking.stock_lebih
                 )
             )
-            allowed_operator_fields = {
-                'note', 'desc_note', 'note_ba', 'carrier_id',
-                'carrier_tracking_ref', 'weight', 'shipping_weight',
-                'move_type', 'sale_id', 'batch_id', 'user_ids',
-                'pick_responsible_ids', 'pack_responsible_ids',
-                'do_responsible_ids', 'putaway_responsible_ids',
-                'picker_scan_code', 'picker_product_id', 'picker_lot_id',
-                'putaway_scan_code', 'putaway_product_id', 'putaway_lot_id', 'putaway_lot_code',
-                'putaway_move_line_ids',
-                'unpacked_scan_code', 'unpacked_product_id', 'unpacked_lot_id',
-                'unpacked_lot_code', 'package_scan_code', 'scanned_package_id',
-                'filtered_package_level_id', 'filtered_move_ids', 'filtered_package_level_ids'
-            }
-            blocked_operator_fields = set(vals) - allowed_operator_fields
-            if protected_pickings and blocked_operator_fields:
-                _logger.warning(
-                    "Warehouse Operator picking write blocked: uid=%s picking_ids=%s fields=%s",
-                    self.env.uid,
-                    protected_pickings.ids,
-                    sorted(blocked_operator_fields),
-                )
-                raise AccessError(_(
-                    'Warehouse Operator hanya dapat mengubah field pada notebook '
-                    'yang diizinkan; field dokumen lainnya hanya dapat dibaca.'
-                ))
+            # allowed_operator_fields = {
+            #     'note', 'desc_note', 'note_ba', 'carrier_id',
+            #     'carrier_tracking_ref', 'weight', 'shipping_weight',
+            #     'move_type', 'sale_id', 'batch_id', 'user_ids',
+            #     'pick_responsible_ids', 'pack_responsible_ids',
+            #     'do_responsible_ids', 'putaway_responsible_ids',
+            #     'picker_scan_code', 'picker_product_id', 'picker_lot_id',
+            #     'putaway_scan_code', 'putaway_product_id', 'putaway_lot_id', 'putaway_lot_code',
+            #     'putaway_move_line_ids',
+            #     'unpacked_scan_code', 'unpacked_product_id', 'unpacked_lot_id',
+            #     'unpacked_lot_code', 'package_scan_code', 'scanned_package_id',
+            #     'filtered_package_level_id', 'filtered_move_ids', 'filtered_package_level_ids'
+            # }
+            # blocked_operator_fields = set(vals) - allowed_operator_fields
+            # if protected_pickings and blocked_operator_fields:
+            #     _logger.warning(
+            #         "Warehouse Operator picking write blocked: uid=%s picking_ids=%s fields=%s",
+            #         self.env.uid,
+            #         protected_pickings.ids,
+            #         sorted(blocked_operator_fields),
+            #     )
+            #     raise AccessError(_(
+            #         'Warehouse Operator hanya dapat mengubah field pada notebook '
+            #         'yang diizinkan; field dokumen lainnya hanya dapat dibaca.'
+            #     ))
 
         result = super().write(vals)
         if (
