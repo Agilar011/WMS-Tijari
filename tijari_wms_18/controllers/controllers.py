@@ -568,7 +568,7 @@ class WmsApiController(http.Controller):
             'vendor': receipt.partner_id.name or '',
             'warehouse': receipt.picking_type_id.name or '',
             'warehouse_id': receipt.picking_type_id.warehouse_id.name or '',
-            'receipt_date': receipt.scheduled_date.strftime('%Y-%m-%d %H:%M:%S') if receipt.scheduled_date else '',
+            'receipt_date': format_tanggal_indo(receipt.date_done),
             'penerima': receipt.location_id.complete_name or '',
             'note': receipt.note_ba or '',
             'user': '',
@@ -898,8 +898,6 @@ class WmsApiController(http.Controller):
             'note': stock.notes or '',
             'created_by': '',
             'ttd_created_by': blank_image,
-            # 'created_by': stock.responsible_id.name or '',
-            # 'ttd_created_by': (stock.responsible_id.partner_id.digital_signature.decode('utf-8') if stock.responsible_id.partner_id.digital_signature else blank_image),
             'status_ba': dict(stock._fields['status_ba'].selection).get(stock.status_ba, ''),
 
             'detail': []
@@ -993,8 +991,6 @@ class WmsApiController(http.Controller):
             'note': stock.note or '',
             'created_by': '',
             'ttd_created_by': blank_image,
-            # 'created_by': request.env.user.name or '',
-            # 'ttd_created_by': (request.env.user.partner_id.digital_signature.decode('utf-8') if request.env.user.partner_id.digital_signature else blank_image),
             'detail': [],
         
         }
@@ -1060,8 +1056,6 @@ class WmsApiController(http.Controller):
             'uom': mrp.product_uom_id.name or 0.0,
             'created_by': '',
             'ttd_created_by': blank_image,
-            # 'ttd_created_by': (mrp.user_id.partner_id.digital_signature.decode('utf-8') if mrp.user_id.partner_id.digital_signature else blank_image),
-            # 'created_by': mrp.user_id.name or '',
         }
 
         list_dikonsumsi = []
@@ -1149,7 +1143,7 @@ class WmsApiController(http.Controller):
             'vendor': receipt.partner_id.name or '',
             'warehouse': receipt.picking_type_id.name or '',
             'warehouse_id': receipt.picking_type_id.warehouse_id.name or '',
-            'receipt_date': receipt.scheduled_date.strftime('%Y-%m-%d %H:%M:%S') if receipt.scheduled_date else '',
+            'receipt_date': format_tanggal_indo(receipt.date_done),
             'penerima': receipt.location_id.complete_name or '',
             'note': receipt.note_ba or '',
             'user': '',
