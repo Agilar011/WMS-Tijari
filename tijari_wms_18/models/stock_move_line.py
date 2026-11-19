@@ -1513,15 +1513,15 @@ class StockMoveLine(models.Model):
             })
 
         self.write({'pick_status': 'finished'})
-        # Refresh every move in the picking so the list order reflects status
-        # changes and any older rows with stale sequence values.
-        self.mapped('move_id.picking_id.move_ids_without_package')._refresh_pick_status_sequence()
+        # The refresh helper skips the picking-wide scan unless this move's
+        # finished/unfinished group actually changed.
+        self.mapped('move_id')._refresh_pick_status_sequence()
         if reload_action:
             return {'type': 'ir.actions.client', 'tag': reload_action}
 
     def action_mark_check_pick_unfinished(self):
         self.write({'pick_status': 'unfinished'})
-        self.mapped('move_id.picking_id.move_ids_without_package')._refresh_pick_status_sequence()
+        self.mapped('move_id')._refresh_pick_status_sequence()
         if self.filtered(lambda line: line.picking_id.batch_id):
             return
         return self.move_id.action_open_move_pick()
@@ -1529,11 +1529,11 @@ class StockMoveLine(models.Model):
     def action_mark_check_pick_unfinished_batch(self):
         """Undo a finished picker line from a batch without reloading the client."""
         self.write({'pick_status': 'unfinished'})
-        self.mapped('move_id.picking_id.move_ids_without_package')._refresh_pick_status_sequence()
+        self.mapped('move_id')._refresh_pick_status_sequence()
 
     def action_mark_check_pick_unfinished_form(self):
         self.write({'pick_status': 'unfinished'})
-        self.mapped('move_id.picking_id.move_ids_without_package')._refresh_pick_status_sequence()
+        self.mapped('move_id')._refresh_pick_status_sequence()
         return self.action_open_move_pick()
 
     def action_open_move_pick(self):

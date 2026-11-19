@@ -846,31 +846,31 @@ class StockPicking(models.Model):
                     and not picking.stock_lebih
                 )
             )
-            allowed_operator_fields = {
-                'note', 'desc_note', 'note_ba', 'carrier_id',
-                'carrier_tracking_ref', 'weight', 'shipping_weight',
-                'move_type', 'sale_id', 'batch_id', 'user_ids',
-                'pick_responsible_ids', 'pack_responsible_ids',
-                'do_responsible_ids', 'putaway_responsible_ids',
-                'picker_scan_code', 'picker_product_id', 'picker_lot_id',
-                'putaway_scan_code', 'putaway_product_id', 'putaway_lot_id', 'putaway_lot_code',
-                'putaway_move_line_ids',
-                'unpacked_scan_code', 'unpacked_product_id', 'unpacked_lot_id',
-                'unpacked_lot_code', 'package_scan_code', 'scanned_package_id',
-                'filtered_package_level_id', 'filtered_move_ids', 'filtered_package_level_ids'
-            }
-            blocked_operator_fields = set(vals) - allowed_operator_fields
-            if protected_pickings and blocked_operator_fields:
-                _logger.warning(
-                    "Warehouse Operator picking write blocked: uid=%s picking_ids=%s fields=%s",
-                    self.env.uid,
-                    protected_pickings.ids,
-                    sorted(blocked_operator_fields),
-                )
-                raise AccessError(_(
-                    'Warehouse Operator hanya dapat mengubah field pada notebook '
-                    'yang diizinkan; field dokumen lainnya hanya dapat dibaca.'
-                ))
+            # allowed_operator_fields = {
+            #     'note', 'desc_note', 'note_ba', 'carrier_id',
+            #     'carrier_tracking_ref', 'weight', 'shipping_weight',
+            #     'move_type', 'sale_id', 'batch_id', 'user_ids',
+            #     'pick_responsible_ids', 'pack_responsible_ids',
+            #     'do_responsible_ids', 'putaway_responsible_ids',
+            #     'picker_scan_code', 'picker_product_id', 'picker_lot_id',
+            #     'putaway_scan_code', 'putaway_product_id', 'putaway_lot_id', 'putaway_lot_code',
+            #     'putaway_move_line_ids',
+            #     'unpacked_scan_code', 'unpacked_product_id', 'unpacked_lot_id',
+            #     'unpacked_lot_code', 'package_scan_code', 'scanned_package_id',
+            #     'filtered_package_level_id', 'filtered_move_ids', 'filtered_package_level_ids'
+            # }
+            # blocked_operator_fields = set(vals) - allowed_operator_fields
+            # if protected_pickings and blocked_operator_fields:
+            #     _logger.warning(
+            #         "Warehouse Operator picking write blocked: uid=%s picking_ids=%s fields=%s",
+            #         self.env.uid,
+            #         protected_pickings.ids,
+            #         sorted(blocked_operator_fields),
+            #     )
+            #     raise AccessError(_(
+            #         'Warehouse Operator hanya dapat mengubah field pada notebook '
+            #         'yang diizinkan; field dokumen lainnya hanya dapat dibaca.'
+            #     ))
 
         result = super().write(vals)
         if (
@@ -3909,6 +3909,13 @@ class StockPicking(models.Model):
         for picking in self:
 
             for line in picking.move_line_ids:
+                if (
+                    picking.picking_type_id.name in ('Pick', 'Pick Components')
+                    and line.pick_status == 'unfinished'
+                    and line.confirmation_quantity == 0
+                ):
+                    continue
+
                 if line.confirmation_quantity <= 0:
                     raise UserError(_(
                         "Qty Diambil tidak boleh 0.\n\n"
@@ -4028,23 +4035,49 @@ class StockPicking(models.Model):
         if self.picking_type_id.name in ('Receipts', 'Receipt Internal', 'Internal Transfers'):
             return self._check_putaway_status_requirements() and self._check_picker_status_requirements()
 
-        if self.picking_type_name not in ['Pick', 'Pick Internal']:
+        if self.picking_type_name not in ['Pick', 'Pick Internal', 'Pick Components']:
             return
 
         active_moves = self.move_ids.filtered(
             lambda move: move.state != "cancel"
         )
 
+        is_pick_operation = self.picking_type_id.name in ('Pick', 'Pick Components')
+        is_pick_components = self.picking_type_id.name == 'Pick Components'
+
+        def is_zero_qty_unfinished_line(line):
+            return (
+                is_pick_operation
+                and line.pick_status == 'unfinished'
+                and line.confirmation_quantity == 0
+            )
+
         unpicked_moves = active_moves.filtered(
-            lambda move: not move.picked
+            lambda move: (
+                not is_pick_components
+                and not move.picked
+                and not (
+                    is_pick_operation
+                    and move.move_line_ids
+                    and all(is_zero_qty_unfinished_line(line) for line in move.move_line_ids)
+                )
+            )
         )
 
         unmatched_move_lines = active_moves.move_line_ids.filtered(
-            lambda line: line.matching != "match"
+            lambda line: (
+                not is_pick_components
+                and line.matching != "match"
+                and not is_zero_qty_unfinished_line(line)
+            )
         )
 
         unfinished_move_lines = active_moves.move_line_ids.filtered(
             lambda line: line.pick_status != "finished"
+            and (
+                not is_pick_operation
+                or line.confirmation_quantity > 0
+            )
         )
 
         error_messages = []
