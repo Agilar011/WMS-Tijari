@@ -353,14 +353,27 @@ class StockMove(models.Model):
     )
 
     def _refresh_pick_status_sequence(self):
-        """Persist the Picker list order from the displayed Pick status."""
+        """Refresh picker order only when an affected move changes status class."""
         for picking in self.mapped('picking_id'):
+            affected_moves = self.filtered(lambda move: move.picking_id == picking)
+            changed_status = any(
+                move.pick_status_sequence != int(
+                    bool(move.move_line_ids)
+                    and all(line.pick_status == 'finished' for line in move.move_line_ids)
+                )
+                for move in affected_moves
+            )
+            if not changed_status:
+                continue
+
             moves = picking.move_ids_without_package
             for move in moves:
                 lines = move.move_line_ids
-                move.pick_status_sequence = 1 if (
+                sequence = 1 if (
                     lines and all(line.pick_status == 'finished' for line in lines)
                 ) else 0
+                if move.pick_status_sequence != sequence:
+                    move.pick_status_sequence = sequence
 
             # The embedded one2many initially follows stock.move's native
             # sequence/id order. Keep unfinished lines first in that relation
@@ -373,7 +386,9 @@ class StockMove(models.Model):
                 )
             )
             for position, move in enumerate(ordered_moves, start=1):
-                move.sequence = position * 10
+                sequence = position * 10
+                if move.sequence != sequence:
+                    move.sequence = sequence
 
     @api.depends('move_line_ids.pick_status')
     def _compute_status_pick_check(self):
