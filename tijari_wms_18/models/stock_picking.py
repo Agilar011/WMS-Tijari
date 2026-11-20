@@ -4166,6 +4166,20 @@ class StockPicking(models.Model):
 
         error_messages = []
 
+        if unfinished_unpacked_items:
+            packages = "\n".join(
+                f"- {line.product_id.name}"
+                for line in unfinished_unpacked_items
+            )
+
+            error_messages.append(
+                (
+                    "Pastikan semua status unpack item sudah 'Finished'.\n"
+                    "Unpack item belum divalidasi:\n%s"
+                )
+                % packages
+            )
+        
         if unfinished_packed_items:
             packages = "\n".join(
                 f"- {line.package_id.name}"
