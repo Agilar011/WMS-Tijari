@@ -40,7 +40,7 @@ class StockLocation(models.Model):
         Partner = self.env['res.partner']
         owner_names = {
             owner_name
-            for owner_name in (name.strip() for name in self.mapped('location_owner'))
+            for owner_name in ((name or '').strip() for name in self.mapped('location_owner'))
             if owner_name
         }
         partners_by_name = {}
