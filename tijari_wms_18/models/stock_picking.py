@@ -193,11 +193,14 @@ class StockPicking(models.Model):
                         if invisible else receipt_picker_restriction,
                     )
                 elif button.get('name') in {
+                    'action_print_warehouse_receipt',
+                    'action_print_warehouse_pick',
                     'action_print_warehouse_pack',
+                    'action_print_warehouse_transfer',
                     'delivery_slip_pack',
                 }:
-                    # Operators can print the BA documents on completed Pack
-                    # transfers; retain each button's own state/type visibility.
+                    # Operators can print BA documents for each operation;
+                    # retain each button's own state/type visibility.
                     continue
                 else:
                     button.set('invisible', '1')
@@ -2383,7 +2386,7 @@ class StockPicking(models.Model):
     def action_print_warehouse_transfer(self):
         action = {}
         action['type'] = 'ir.actions.act_url'
-        action['url'] = '/print/warehouse_transfer?id=' + str(self.id)
+        action['url'] = '/print/delivery?id=' + str(self.id)
         action['target'] = 'new'
         return action
 
