@@ -17,6 +17,7 @@
                 <filter name="tijari_internal_transfer" string="Internal Transfers" domain="[('picking_type_id.name', 'in', ['Internal Transfer', 'Internal Transfers', 'Transfer Internal'])]"/>
                 <filter name="tijari_document_only" string="Document Only" domain="[('adt_is_document_only', '=', True)]"/>
                 <separator/>
+                <filter name="group_by_worklist_group_view" string="By Group View" context="{'group_by': 'worklist_group_view'}"/>
                 <filter name="group_by_adt_type" string="By Tipe Transaksi" context="{'group_by': 'adt_type'}"/>
             </xpath>
         </field>
@@ -250,6 +251,13 @@
                     class="btn-primary"
                     invisible="picking_type_name not in ['Delivery Orders'] or adt_type not in ['Sales Order Shipment'] or wms_state != 'return_shipment'"/>
 
+                <button name="action_send_email_hasil_transfer"
+                    string="Send Email"
+                    type="object"
+                    class="btn-primary"
+                    groups="stock.group_stock_manager,base.group_system,tijari_wms_18.group_accounting_stock,tijari_wms_18.group_warehouse_admin"
+                    invisible="state != 'done' or picking_type_name not in ['Delivery Orders', 'Internal Transfer']"/>
+
                 <button name="action_print_warehouse_receipt"
                     type="object"
                     string="BA Receipt"
@@ -264,6 +272,20 @@
                     class="btn-primary"
                     groups="stock.group_stock_manager,base.group_system,tijari_wms_18.group_accounting_stock,tijari_wms_18.group_warehouse_admin"
                     invisible="state != 'done' or picking_type_name not in ['Receipts', 'Receipt Internal']"/>
+
+                <button name="action_send_email_hasil_pick"
+                    string="Send Email"
+                    type="object"
+                    class="btn-primary"
+                    groups="stock.group_stock_manager,base.group_system,tijari_wms_18.group_accounting_stock,tijari_wms_18.group_warehouse_admin"
+                    invisible="state != 'done' or picking_type_name not in ['Pick', 'Pick Internal']"/>
+
+                <button name="action_send_email_hasil_pack"
+                    string="Send Email"
+                    type="object"
+                    class="btn-primary"
+                    groups="stock.group_stock_manager,base.group_system,tijari_wms_18.group_accounting_stock,tijari_wms_18.group_warehouse_admin"
+                    invisible="state != 'done' or picking_type_name not in ['Pack', 'Pack Internal']"/>
 
             </xpath>
 
@@ -1785,7 +1807,6 @@
                                 <field name="quantity" string="Quantity" readonly="not is_quantity_done_editable" optional="hide" decoration-danger="product_uom_qty and quantity > product_uom_qty and parent.state not in ['done', 'cancel']"/>
                                 <field name="qty_pack" string="Qty Pack" optional="show"/>
                                 <field name="qty_unpack" string="Qty Unpack" optional="show"/>
-                                <field name="so_confirmation_quantity" string="Qty Dikirim" optional="show" column_invisible="not parent.internal_transfer_order_id"/>
                                 <field name="picked" optional="hide" column_invisible="parent.state=='draft'"/>
                                 <field name="adt_dest_location_id" string="Final Location" column_invisible="True"/>
                                 <field name="difference_quantity" string="Perbedaan Qty" readonly="1" optional="show" column_invisible="parent.state=='draft'" decoration-danger="difference_quantity > 0"/>
@@ -2258,6 +2279,48 @@
             <div>
                 <p>Yth. Bapak/Ibu,</p>
                 <p>Berikut kami lampirkan dokumen Berita Acara Penerimaan Barang untuk dapat diperiksa dan ditindaklanjuti.</p>
+                <p>Terima kasih.</p>
+            </div>
+        </field>
+    </record>
+
+    <record id="email_template_stock_picking_pick" model="mail.template">
+        <field name="name">Email Berita Acara Pick</field>
+        <field name="model_id" ref="stock.model_stock_picking"/>
+        <field name="subject">Berita Acara Pick - {{ object.adt_type or '' }} - {{ object.origin or object.name }}</field>
+        <field name="email_layout_xmlid">tijari_wms_18.email_layout_picking_plain</field>
+        <field name="body_html" type="html">
+            <div>
+                <p>Yth. Bapak/Ibu,</p>
+                <p>Berikut kami lampirkan dokumen Berita Acara Pick untuk dapat diperiksa dan ditindaklanjuti.</p>
+                <p>Terima kasih.</p>
+            </div>
+        </field>
+    </record>
+
+    <record id="email_template_stock_picking_pack" model="mail.template">
+        <field name="name">Email Berita Acara Pack</field>
+        <field name="model_id" ref="stock.model_stock_picking"/>
+        <field name="subject">Berita Acara Pack - {{ object.adt_type or '' }} - {{ object.origin or object.name }}</field>
+        <field name="email_layout_xmlid">tijari_wms_18.email_layout_picking_plain</field>
+        <field name="body_html" type="html">
+            <div>
+                <p>Yth. Bapak/Ibu,</p>
+                <p>Berikut kami lampirkan dokumen Berita Acara Pack untuk dapat diperiksa dan ditindaklanjuti.</p>
+                <p>Terima kasih.</p>
+            </div>
+        </field>
+    </record>
+
+    <record id="email_template_stock_picking_transfer" model="mail.template">
+        <field name="name">Email Berita Acara Delivery</field>
+        <field name="model_id" ref="stock.model_stock_picking"/>
+        <field name="subject">Berita Acara Delivery - {{ object.adt_type or '' }} - {{ object.origin or object.name }}</field>
+        <field name="email_layout_xmlid">tijari_wms_18.email_layout_picking_plain</field>
+        <field name="body_html" type="html">
+            <div>
+                <p>Yth. Bapak/Ibu,</p>
+                <p>Berikut kami lampirkan dokumen Berita Acara Delivery untuk dapat diperiksa dan ditindaklanjuti.</p>
                 <p>Terima kasih.</p>
             </div>
         </field>

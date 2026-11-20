@@ -146,6 +146,7 @@ access_wms_scrap_move_line_warehouse_admin,wms.scrap.move.line.warehouse.admin,m
 access_wms_scrap_move_line_it_staff,wms.scrap.move.line.it.staff,model_wms_scrap_move_line,tijari_wms_18.group_it_staff,1,1,1,1
 
 access_generate_package_wizard_operator,generate.package.wizard.operator,model_generate_package_wizard,tijari_wms_18.group_operator,1,1,1,1
+access_generate_package_wizard_warehouse_head,generate.package.wizard.warehouse.head,model_generate_package_wizard,tijari_wms_18.group_warehouse_head,1,1,1,1
 access_generate_package_wizard_warehouse_admin,generate.package.wizard.warehouse.admin,model_generate_package_wizard,tijari_wms_18.group_warehouse_admin,1,1,1,1
 access_generate_package_wizard_warehouse_manager,generate.package.wizard.warehouse.manager,model_generate_package_wizard,tijari_wms_18.group_warehouse_manager,1,1,1,1
 access_generate_package_wizard_manager,generate.package.wizard.manager,model_generate_package_wizard,stock.group_stock_manager,1,1,1,1

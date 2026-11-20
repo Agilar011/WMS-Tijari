@@ -193,11 +193,14 @@ class StockPicking(models.Model):
                         if invisible else receipt_picker_restriction,
                     )
                 elif button.get('name') in {
+                    'action_print_warehouse_receipt',
+                    'action_print_warehouse_pick',
                     'action_print_warehouse_pack',
+                    'action_print_warehouse_transfer',
                     'delivery_slip_pack',
                 }:
-                    # Operators can print the BA documents on completed Pack
-                    # transfers; retain each button's own state/type visibility.
+                    # Operators can print BA documents for each operation;
+                    # retain each button's own state/type visibility.
                     continue
                 else:
                     button.set('invisible', '1')
@@ -354,6 +357,13 @@ class StockPicking(models.Model):
     adt_change_item_ref_nbr = fields.Char(string='Change Item Ref. Nbr (Acumatica)')
     adt_is_document_only = fields.Boolean(string='Is Document Only', index=True, copy=False)
     operation_category = fields.Selection(related='picking_type_id.operation_category', string='Operation Category', store=True, readonly=True)
+    worklist_group_view = fields.Selection(
+        related='picking_type_id.group_view',
+        string='Worklist Group View',
+        store=True,
+        readonly=True,
+        index=True,
+    )
     adt_destination_location_address = fields.Char(string='Destination Address')
     qr_code_image = fields.Binary(string='Sign')
 
@@ -2352,6 +2362,135 @@ class StockPicking(models.Model):
             },
         }
 
+    def action_send_email_hasil_pick(self):
+        self.ensure_one()
+
+        response = WmsApiController().PrintWarehousePick(id=self.id)
+        content_type = response.headers.get('Content-Type', '')
+        if (
+            response.status_code != 200
+            or not response.data
+            or 'application/pdf' not in content_type.lower()
+        ):
+            raise UserError(_('Gagal membuat PDF berita acara pick.'))
+
+        attachment = self.env['ir.attachment'].sudo().create({
+            'name': '%s_ba_pick.pdf' % (self.origin or self.name or 'pick'),
+            'datas': base64.b64encode(response.data).decode('utf-8'),
+            'res_model': self._name,
+            'res_id': self.id,
+            'type': 'binary',
+            'mimetype': 'application/pdf',
+        })
+        template = self.env.ref(
+            'tijari_wms_18.email_template_stock_picking_pick',
+            raise_if_not_found=False,
+        )
+
+        return {
+            'name': _('Kirim Email Berita Acara Pick'),
+            'type': 'ir.actions.act_window',
+            'res_model': 'mail.compose.message',
+            'view_mode': 'form',
+            'target': 'new',
+            'context': {
+                'default_model': self._name,
+                'default_res_ids': [self.id],
+                'default_use_template': bool(template),
+                'default_template_id': template.id if template else False,
+                'default_composition_mode': 'comment',
+                'default_attachment_ids': [(6, 0, [attachment.id])],
+                'force_email': True,
+                'tijari_hasil_pick_email': True,
+            },
+        }
+
+    def action_send_email_hasil_pack(self):
+        self.ensure_one()
+
+        response = WmsApiController().PrintWarehousePack(id=self.id)
+        content_type = response.headers.get('Content-Type', '')
+        if (
+            response.status_code != 200
+            or not response.data
+            or 'application/pdf' not in content_type.lower()
+        ):
+            raise UserError(_('Gagal membuat PDF berita acara pack.'))
+
+        attachment = self.env['ir.attachment'].sudo().create({
+            'name': '%s_ba_pack.pdf' % (self.origin or self.name or 'pack'),
+            'datas': base64.b64encode(response.data).decode('utf-8'),
+            'res_model': self._name,
+            'res_id': self.id,
+            'type': 'binary',
+            'mimetype': 'application/pdf',
+        })
+        template = self.env.ref(
+            'tijari_wms_18.email_template_stock_picking_pack',
+            raise_if_not_found=False,
+        )
+
+        return {
+            'name': _('Kirim Email Berita Acara Pack'),
+            'type': 'ir.actions.act_window',
+            'res_model': 'mail.compose.message',
+            'view_mode': 'form',
+            'target': 'new',
+            'context': {
+                'default_model': self._name,
+                'default_res_ids': [self.id],
+                'default_use_template': bool(template),
+                'default_template_id': template.id if template else False,
+                'default_composition_mode': 'comment',
+                'default_attachment_ids': [(6, 0, [attachment.id])],
+                'force_email': True,
+                'tijari_hasil_pack_email': True,
+            },
+        }
+
+    def action_send_email_hasil_transfer(self):
+        self.ensure_one()
+
+        response = WmsApiController().PrintWarehouseTransfer(id=self.id)
+        content_type = response.headers.get('Content-Type', '')
+        if (
+            response.status_code != 200
+            or not response.data
+            or 'application/pdf' not in content_type.lower()
+        ):
+            raise UserError(_('Gagal membuat PDF berita acara delivery.'))
+
+        attachment = self.env['ir.attachment'].sudo().create({
+            'name': '%s_ba_internal_transfer.pdf' % (self.origin or self.name or 'transfer'),
+            'datas': base64.b64encode(response.data).decode('utf-8'),
+            'res_model': self._name,
+            'res_id': self.id,
+            'type': 'binary',
+            'mimetype': 'application/pdf',
+        })
+        template = self.env.ref(
+            'tijari_wms_18.email_template_stock_picking_transfer',
+            raise_if_not_found=False,
+        )
+
+        return {
+            'name': _('Kirim Email Berita Acara Delivery'),
+            'type': 'ir.actions.act_window',
+            'res_model': 'mail.compose.message',
+            'view_mode': 'form',
+            'target': 'new',
+            'context': {
+                'default_model': self._name,
+                'default_res_ids': [self.id],
+                'default_use_template': bool(template),
+                'default_template_id': template.id if template else False,
+                'default_composition_mode': 'comment',
+                'default_attachment_ids': [(6, 0, [attachment.id])],
+                'force_email': True,
+                'tijari_hasil_transfer_email': True,
+            },
+        }
+
     def action_print_warehouse_receipt(self):
         action = {}
         action['type'] = 'ir.actions.act_url'
@@ -2383,7 +2522,7 @@ class StockPicking(models.Model):
     def action_print_warehouse_transfer(self):
         action = {}
         action['type'] = 'ir.actions.act_url'
-        action['url'] = '/print/warehouse_transfer?id=' + str(self.id)
+        action['url'] = '/print/delivery?id=' + str(self.id)
         action['target'] = 'new'
         return action
 
@@ -3596,15 +3735,28 @@ class StockPicking(models.Model):
 
             })
 
+            # Several Pick moves can point to one Pack move after Odoo merges
+            # the downstream moves. Aggregate their confirmed quantities
+            # before writing, otherwise the last Pick move overwrites the
+            # quantities contributed by the earlier moves.
+            pack_demand_by_move = {}
             for move in self.move_ids:
-                confirmation_qty = move.confirmation_quantity
-
                 for dest_move in move.move_dest_ids.filtered(
                     lambda m: m.picking_id.picking_type_name == "Pack"
                 ):
-                    dest_move.write({
-                        'product_uom_qty': confirmation_qty,
-                    })
+                    confirmation_qty = move.product_uom._compute_quantity(
+                        move.confirmation_quantity,
+                        dest_move.product_uom,
+                        round=False,
+                    )
+                    pack_demand_by_move[dest_move.id] = (
+                        dest_move,
+                        pack_demand_by_move.get(dest_move.id, (dest_move, 0.0))[1]
+                        + confirmation_qty,
+                    )
+
+            for dest_move, confirmation_qty in pack_demand_by_move.values():
+                dest_move.write({'product_uom_qty': confirmation_qty})
 
         elif 'Pack' in (self.picking_type_name or ""):
             next_pickings = self.move_ids.move_dest_ids.mapped("picking_id").filtered(
@@ -4163,6 +4315,20 @@ class StockPicking(models.Model):
 
         error_messages = []
 
+        if unfinished_unpacked_items:
+            packages = "\n".join(
+                f"- {line.product_id.name}"
+                for line in unfinished_unpacked_items
+            )
+
+            error_messages.append(
+                (
+                    "Pastikan semua status unpack item sudah 'Finished'.\n"
+                    "Unpack item belum divalidasi:\n%s"
+                )
+                % packages
+            )
+        
         if unfinished_packed_items:
             packages = "\n".join(
                 f"- {line.package_id.name}"
