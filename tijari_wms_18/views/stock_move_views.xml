@@ -2850,7 +2850,7 @@
                             title="Undo Package"
                             invisible="status_check != 'finished' or state not in ['confirmed', 'assigned']"/>
                     </list>
-                    <kanban class="o_kanban_mobile" default_order="picker_status desc, id">
+                    <kanban class="o_kanban_mobile" default_order="picker_status desc, id" create="0" delete="0">
                         <field name="company_id" invisible="1" force_save="1"/>
                         <field name="picking_id" invisible="1" force_save="1"/>
                         <field name="move_id" invisible="1" force_save="1"/>

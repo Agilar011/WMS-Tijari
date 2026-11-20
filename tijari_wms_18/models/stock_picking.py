@@ -193,11 +193,14 @@ class StockPicking(models.Model):
                         if invisible else receipt_picker_restriction,
                     )
                 elif button.get('name') in {
+                    'action_print_warehouse_receipt',
+                    'action_print_warehouse_pick',
                     'action_print_warehouse_pack',
+                    'action_print_warehouse_transfer',
                     'delivery_slip_pack',
                 }:
-                    # Operators can print the BA documents on completed Pack
-                    # transfers; retain each button's own state/type visibility.
+                    # Operators can print BA documents for each operation;
+                    # retain each button's own state/type visibility.
                     continue
                 else:
                     button.set('invisible', '1')
@@ -2383,7 +2386,7 @@ class StockPicking(models.Model):
     def action_print_warehouse_transfer(self):
         action = {}
         action['type'] = 'ir.actions.act_url'
-        action['url'] = '/print/warehouse_transfer?id=' + str(self.id)
+        action['url'] = '/print/delivery?id=' + str(self.id)
         action['target'] = 'new'
         return action
 
@@ -3909,6 +3912,13 @@ class StockPicking(models.Model):
         for picking in self:
 
             for line in picking.move_line_ids:
+                if (
+                    picking.picking_type_id.name in ('Pick', 'Pick Components')
+                    and line.pick_status == 'unfinished'
+                    and line.confirmation_quantity == 0
+                ):
+                    continue
+
                 if line.confirmation_quantity <= 0:
                     raise UserError(_(
                         "Qty Diambil tidak boleh 0.\n\n"
@@ -4028,23 +4038,49 @@ class StockPicking(models.Model):
         if self.picking_type_id.name in ('Receipts', 'Receipt Internal', 'Internal Transfers'):
             return self._check_putaway_status_requirements() and self._check_picker_status_requirements()
 
-        if self.picking_type_name not in ['Pick', 'Pick Internal']:
+        if self.picking_type_name not in ['Pick', 'Pick Internal', 'Pick Components']:
             return
 
         active_moves = self.move_ids.filtered(
             lambda move: move.state != "cancel"
         )
 
+        is_pick_operation = self.picking_type_id.name in ('Pick', 'Pick Components')
+        is_pick_components = self.picking_type_id.name == 'Pick Components'
+
+        def is_zero_qty_unfinished_line(line):
+            return (
+                is_pick_operation
+                and line.pick_status == 'unfinished'
+                and line.confirmation_quantity == 0
+            )
+
         unpicked_moves = active_moves.filtered(
-            lambda move: not move.picked
+            lambda move: (
+                not is_pick_components
+                and not move.picked
+                and not (
+                    is_pick_operation
+                    and move.move_line_ids
+                    and all(is_zero_qty_unfinished_line(line) for line in move.move_line_ids)
+                )
+            )
         )
 
         unmatched_move_lines = active_moves.move_line_ids.filtered(
-            lambda line: line.matching != "match"
+            lambda line: (
+                not is_pick_components
+                and line.matching != "match"
+                and not is_zero_qty_unfinished_line(line)
+            )
         )
 
         unfinished_move_lines = active_moves.move_line_ids.filtered(
             lambda line: line.pick_status != "finished"
+            and (
+                not is_pick_operation
+                or line.confirmation_quantity > 0
+            )
         )
 
         error_messages = []
@@ -4130,6 +4166,20 @@ class StockPicking(models.Model):
 
         error_messages = []
 
+        if unfinished_unpacked_items:
+            packages = "\n".join(
+                f"- {line.product_id.name}"
+                for line in unfinished_unpacked_items
+            )
+
+            error_messages.append(
+                (
+                    "Pastikan semua status unpack item sudah 'Finished'.\n"
+                    "Unpack item belum divalidasi:\n%s"
+                )
+                % packages
+            )
+        
         if unfinished_packed_items:
             packages = "\n".join(
                 f"- {line.package_id.name}"

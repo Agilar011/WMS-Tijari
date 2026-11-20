@@ -567,8 +567,10 @@ class WmsApiController(http.Controller):
             'no': receipt.origin or '',
             'vendor': receipt.partner_id.name or '',
             'warehouse': receipt.picking_type_id.name or '',
+            'receipt_date_label': '%s Date' % (receipt.picking_type_id.name or ''),
+            'status_ba_label': 'Status %s' % (receipt.picking_type_id.name or ''),
             'warehouse_id': receipt.picking_type_id.warehouse_id.name or '',
-            'receipt_date': receipt.scheduled_date.strftime('%Y-%m-%d %H:%M:%S') if receipt.scheduled_date else '',
+            'receipt_date': format_tanggal_indo(receipt.date_done),
             'penerima': receipt.location_id.complete_name or '',
             'note': receipt.note_ba or '',
             'user': '',
@@ -898,8 +900,6 @@ class WmsApiController(http.Controller):
             'note': stock.notes or '',
             'created_by': '',
             'ttd_created_by': blank_image,
-            # 'created_by': stock.responsible_id.name or '',
-            # 'ttd_created_by': (stock.responsible_id.partner_id.digital_signature.decode('utf-8') if stock.responsible_id.partner_id.digital_signature else blank_image),
             'status_ba': dict(stock._fields['status_ba'].selection).get(stock.status_ba, ''),
 
             'detail': []
@@ -993,8 +993,6 @@ class WmsApiController(http.Controller):
             'note': stock.note or '',
             'created_by': '',
             'ttd_created_by': blank_image,
-            # 'created_by': request.env.user.name or '',
-            # 'ttd_created_by': (request.env.user.partner_id.digital_signature.decode('utf-8') if request.env.user.partner_id.digital_signature else blank_image),
             'detail': [],
         
         }
@@ -1060,8 +1058,6 @@ class WmsApiController(http.Controller):
             'uom': mrp.product_uom_id.name or 0.0,
             'created_by': '',
             'ttd_created_by': blank_image,
-            # 'ttd_created_by': (mrp.user_id.partner_id.digital_signature.decode('utf-8') if mrp.user_id.partner_id.digital_signature else blank_image),
-            # 'created_by': mrp.user_id.name or '',
         }
 
         list_dikonsumsi = []
@@ -1148,8 +1144,10 @@ class WmsApiController(http.Controller):
             'no': receipt.origin or '',
             'vendor': receipt.partner_id.name or '',
             'warehouse': receipt.picking_type_id.name or '',
+            'receipt_date_label': '%s Date' % (receipt.picking_type_id.name or ''),
+            'status_ba_label': 'Status %s' % (receipt.picking_type_id.name or ''),
             'warehouse_id': receipt.picking_type_id.warehouse_id.name or '',
-            'receipt_date': receipt.scheduled_date.strftime('%Y-%m-%d %H:%M:%S') if receipt.scheduled_date else '',
+            'receipt_date': format_tanggal_indo(receipt.date_done),
             'penerima': receipt.location_id.complete_name or '',
             'note': receipt.note_ba or '',
             'user': '',
@@ -1219,21 +1217,22 @@ class WmsApiController(http.Controller):
             resp = {'msg': msg, 'request_content': str(request_content)}
             resp = json.dumps(resp)
             return request.make_response(resp, [('Content-Type', 'application/json')])
-
-    @http.route('/print/warehouse_pack', type='http', auth='user')
-    def PrintWarehousePack(self, id, **kw):
+    @http.route('/print/delivery', type='http', auth='user')
+    def PrintWarehouseDelivery(self, id, **kw):
         blank_image = create_blank_image()
         receipt = request.env['stock.picking'].sudo().browse(int(id))
 
         data = {
             'type': receipt.adt_type or '',
-            'tgl': format_tanggal_indo(receipt.scheduled_date),
+            'tgl': format_tanggal_indo(receipt.date_done),
             'date': format_tanggal_indo(receipt.create_date.date()) if receipt.create_date else '',
             'no': receipt.origin or '',
             'vendor': receipt.partner_id.name or '',
             'warehouse': receipt.picking_type_id.name or '',
+            'receipt_date_label': '%s Date' % (receipt.picking_type_id.name or ''),
+            'status_ba_label': 'Status %s' % (receipt.picking_type_id.name or ''),
             'warehouse_id': receipt.picking_type_id.warehouse_id.name or '',
-            'receipt_date': receipt.scheduled_date.strftime('%Y-%m-%d %H:%M:%S') if receipt.scheduled_date else '',
+            'receipt_date': format_tanggal_indo(receipt.date_done),
             'penerima': receipt.location_id.complete_name or '',
             'note': receipt.note_ba or '',
             'user': '',
@@ -1262,8 +1261,93 @@ class WmsApiController(http.Controller):
                     else difference_text
                 ),
                 'demand': float(line.product_uom_qty or 0),
-                'demand1': float(line.confirmation_quantity or 0),
-                'qty': float(line.confirmation_quantity or 0),
+                'demand1': float(line.quantity or 0),
+                'qty': float(line.quantity or 0),
+                'qty2': float(line.product_uom_qty or 0),
+                'ket': ''
+            }
+            data['detail'].append(obj)
+
+        data = json.dumps(data)
+
+        usrnm = 'jasperadmin'
+        psswd = 't1j4r1s0lut10n'
+        import requests
+        execution = _wms_http_post('http://35.194.200.100:8080/jasperserver/rest_v2/reportExecutions',
+            auth=(usrnm, psswd),
+            json={
+                'reportUnitUri': '/Odoo/ADITYA/warehouse_delivery',
+                'outputFormat': 'pdf',
+                'parameters': {
+                    'reportParameter': [{
+                        'name': 'data',
+                        'value': [data]
+                    }]
+                }
+            })
+        from lxml import etree
+        xml = etree.XML(execution.content)
+
+        try:
+            request_id = xml.find('.//requestId').text
+            export_id = xml.find('.//export//id').text
+            result = _wms_http_get('http://35.194.200.100:8080/jasperserver/rest_v2/reportExecutions/' + request_id + '/exports/' + export_id + '/outputResource', cookies=execution.cookies, verify=False)
+            disposition = _inline_pdf_content_disposition('Delivery', receipt.origin)
+            return request.make_response(result.content, [('Content-Type', result.headers['content-type']), ('Content-Disposition', disposition)])
+        except:
+            import traceback
+            msg = traceback.format_exc()
+            request_content = execution.content
+            resp = {'msg': msg, 'request_content': str(request_content)}
+            resp = json.dumps(resp)
+            return request.make_response(resp, [('Content-Type', 'application/json')])
+
+    @http.route('/print/warehouse_pack', type='http', auth='user')
+    def PrintWarehousePack(self, id, **kw):
+        blank_image = create_blank_image()
+        receipt = request.env['stock.picking'].sudo().browse(int(id))
+
+        data = {
+            'type': receipt.adt_type or '',
+            'tgl': format_tanggal_indo(receipt.date_done),
+            'date': format_tanggal_indo(receipt.create_date.date()) if receipt.create_date else '',
+            'no': receipt.origin or '',
+            'vendor': receipt.partner_id.name or '',
+            'warehouse': receipt.picking_type_id.name or '',
+            'receipt_date_label': '%s Date' % (receipt.picking_type_id.name or ''),
+            'status_ba_label': 'Status %s' % (receipt.picking_type_id.name or ''),
+            'warehouse_id': receipt.picking_type_id.warehouse_id.name or '',
+            'receipt_date': format_tanggal_indo(receipt.date_done),
+            'penerima': receipt.location_id.complete_name or '',
+            'note': receipt.note_ba or '',
+            'user': '',
+            'ttd_user': blank_image,
+            'created_by': '',
+            'ttd_created_by': blank_image,
+            'approved_by': '',
+            'ttd_approved_by': blank_image,
+            'status_ba': dict(receipt._fields['status_ba'].selection).get(receipt.status_ba, ''),
+            'status_ba_color': 'green' if receipt.status_ba == 'conform' else 'red',
+            'detail': []
+        }
+        for line in receipt.move_ids_without_package:
+            difference_qty = float(line.difference_quantity or 0)
+            if difference_qty.is_integer():
+                difference_text = str(int(difference_qty))
+            else:
+                difference_text = str(difference_qty)
+
+            obj = {
+                'name': line.product_id.display_name or '',
+                'uom': line.product_uom.name or '',
+                'difference_quantity': (
+                    "<style forecolor='red'>%s</style>" % difference_text
+                    if difference_qty > 0
+                    else difference_text
+                ),
+                'demand': float(line.product_uom_qty or 0),
+                'demand1': float(line.quantity or 0),
+                'qty': float(line.quantity or 0),
                 'qty2': float(line.product_uom_qty or 0),
                 'ket': ''
             }
@@ -1303,88 +1387,90 @@ class WmsApiController(http.Controller):
             resp = json.dumps(resp)
             return request.make_response(resp, [('Content-Type', 'application/json')])
 
-    @http.route('/print/warehouse_transfer', type='http', auth='user')
-    def PrintWarehouseTransfer(self, id, **kw):
-        blank_image = create_blank_image()
-        receipt = request.env['stock.picking'].sudo().browse(int(id))
+    # @http.route('/print/warehouse_transfer', type='http', auth='user')
+    # def PrintWarehouseTransfer(self, id, **kw):
+    #     blank_image = create_blank_image()
+    #     receipt = request.env['stock.picking'].sudo().browse(int(id))
 
-        data = {
-            'type': receipt.adt_type or '',
-            'tgl': format_tanggal_indo(receipt.scheduled_date),
-            'date': format_tanggal_indo(receipt.create_date.date()) if receipt.create_date else '',
-            'no': receipt.origin or '',
-            'vendor': receipt.partner_id.name or '',
-            'warehouse': receipt.picking_type_id.name or '',
-            'warehouse_id': receipt.picking_type_id.warehouse_id.name or '',
-            'receipt_date': receipt.scheduled_date.strftime('%Y-%m-%d %H:%M:%S') if receipt.scheduled_date else '',
-            'penerima': receipt.location_id.complete_name or '',
-            'note': receipt.note_ba or '',
-            'user': '',
-            'ttd_user': blank_image,
-            'created_by': '',
-            'ttd_created_by': blank_image,
-            'approved_by': '',
-            'ttd_approved_by': blank_image,
-            'status_ba': dict(receipt._fields['status_ba'].selection).get(receipt.status_ba, ''),
-            'status_ba_color': 'green' if receipt.status_ba == 'conform' else 'red',
-            'detail': []
-        }
-        for line in receipt.move_ids_without_package:
-            difference_qty = float(line.difference_quantity or 0)
-            if difference_qty.is_integer():
-                difference_text = str(int(difference_qty))
-            else:
-                difference_text = str(difference_qty)
+    #     data = {
+    #         'type': receipt.adt_type or '',
+    #         'tgl': format_tanggal_indo(receipt.scheduled_date),
+    #         'date': format_tanggal_indo(receipt.create_date.date()) if receipt.create_date else '',
+    #         'no': receipt.origin or '',
+    #         'vendor': receipt.partner_id.name or '',
+    #         'warehouse': receipt.picking_type_id.name or '',
+    #         'receipt_date_label': '%s Date' % (receipt.picking_type_id.name or ''),
+    #         'status_ba_label': 'Status %s' % (receipt.picking_type_id.name or ''),
+    #         'warehouse_id': receipt.picking_type_id.warehouse_id.name or '',
+    #         'receipt_date': format_tanggal_indo(receipt.date_done),
+    #         'penerima': receipt.location_id.complete_name or '',
+    #         'note': receipt.note_ba or '',
+    #         'user': '',
+    #         'ttd_user': blank_image,
+    #         'created_by': '',
+    #         'ttd_created_by': blank_image,
+    #         'approved_by': '',
+    #         'ttd_approved_by': blank_image,
+    #         'status_ba': dict(receipt._fields['status_ba'].selection).get(receipt.status_ba, ''),
+    #         'status_ba_color': 'green' if receipt.status_ba == 'conform' else 'red',
+    #         'detail': []
+    #     }
+    #     for line in receipt.move_ids_without_package:
+    #         difference_qty = float(line.difference_quantity or 0)
+    #         if difference_qty.is_integer():
+    #             difference_text = str(int(difference_qty))
+    #         else:
+    #             difference_text = str(difference_qty)
 
-            obj = {
-                'name': line.product_id.display_name or '',
-                'uom': line.product_uom.name or '',
-                'difference_quantity': (
-                    "<style forecolor='red'>%s</style>" % difference_text
-                    if difference_qty > 0
-                    else difference_text
-                ),
-                'demand': float(line.product_uom_qty or 0),
-                'demand1': float(line.confirmation_quantity or 0),
-                'qty': float(line.confirmation_quantity or 0),
-                'qty2': float(line.product_uom_qty or 0),
-                'ket': ''
-            }
-            data['detail'].append(obj)
+    #         obj = {
+    #             'name': line.product_id.display_name or '',
+    #             'uom': line.product_uom.name or '',
+    #             'difference_quantity': (
+    #                 "<style forecolor='red'>%s</style>" % difference_text
+    #                 if difference_qty > 0
+    #                 else difference_text
+    #             ),
+    #             'demand': float(line.product_uom_qty or 0),
+    #             'demand1': float(line.confirmation_quantity or 0),
+    #             'qty': float(line.confirmation_quantity or 0),
+    #             'qty2': float(line.product_uom_qty or 0),
+    #             'ket': ''
+    #         }
+    #         data['detail'].append(obj)
 
-        data = json.dumps(data)
+    #     data = json.dumps(data)
 
-        usrnm = 'jasperadmin'
-        psswd = 't1j4r1s0lut10n'
-        import requests
-        execution = _wms_http_post('http://35.194.200.100:8080/jasperserver/rest_v2/reportExecutions',
-            auth=(usrnm, psswd),
-            json={
-                'reportUnitUri': '/Odoo/ADITYA/warehouse_pack',
-                'outputFormat': 'pdf',
-                'parameters': {
-                    'reportParameter': [{
-                        'name': 'data',
-                        'value': [data]
-                    }]
-                }
-            })
-        from lxml import etree
-        xml = etree.XML(execution.content)
+    #     usrnm = 'jasperadmin'
+    #     psswd = 't1j4r1s0lut10n'
+    #     import requests
+    #     execution = _wms_http_post('http://35.194.200.100:8080/jasperserver/rest_v2/reportExecutions',
+    #         auth=(usrnm, psswd),
+    #         json={
+    #             'reportUnitUri': '/Odoo/ADITYA/warehouse_pack',
+    #             'outputFormat': 'pdf',
+    #             'parameters': {
+    #                 'reportParameter': [{
+    #                     'name': 'data',
+    #                     'value': [data]
+    #                 }]
+    #             }
+    #         })
+    #     from lxml import etree
+    #     xml = etree.XML(execution.content)
 
-        try:
-            request_id = xml.find('.//requestId').text
-            export_id = xml.find('.//export//id').text
-            result = _wms_http_get('http://35.194.200.100:8080/jasperserver/rest_v2/reportExecutions/' + request_id + '/exports/' + export_id + '/outputResource', cookies=execution.cookies, verify=False)
-            disposition = _inline_pdf_content_disposition('Internal Transfer', receipt.origin)
-            return request.make_response(result.content, [('Content-Type', result.headers['content-type']), ('Content-Disposition', disposition)])
-        except:
-            import traceback
-            msg = traceback.format_exc()
-            request_content = execution.content
-            resp = {'msg': msg, 'request_content': str(request_content)}
-            resp = json.dumps(resp)
-            return request.make_response(resp, [('Content-Type', 'application/json')])
+    #     try:
+    #         request_id = xml.find('.//requestId').text
+    #         export_id = xml.find('.//export//id').text
+    #         result = _wms_http_get('http://35.194.200.100:8080/jasperserver/rest_v2/reportExecutions/' + request_id + '/exports/' + export_id + '/outputResource', cookies=execution.cookies, verify=False)
+    #         disposition = _inline_pdf_content_disposition('Internal Transfer', receipt.origin)
+    #         return request.make_response(result.content, [('Content-Type', result.headers['content-type']), ('Content-Disposition', disposition)])
+    #     except:
+    #         import traceback
+    #         msg = traceback.format_exc()
+    #         request_content = execution.content
+    #         resp = {'msg': msg, 'request_content': str(request_content)}
+    #         resp = json.dumps(resp)
+    #         return request.make_response(resp, [('Content-Type', 'application/json')])
 
     @http.route('/print/delivery_slip_pack_', type='http', auth='user')
     def PrintDeliverySlipPack(self, id, **kw):
@@ -1399,6 +1485,8 @@ class WmsApiController(http.Controller):
             'name': receipt.name or '',
             'vendor': receipt.partner_id.name or '',
             'warehouse': receipt.picking_type_id.name or '',
+            'receipt_date_label': '%s Date' % (receipt.picking_type_id.name or ''),
+            'status_ba_label': 'Status %s' % (receipt.picking_type_id.name or ''),
             'warehouse_id': receipt.picking_type_id.warehouse_id.name or '',
             'scheduled_date': receipt.scheduled_date.strftime('%Y-%m-%d %H:%M:%S') if receipt.scheduled_date else '',
             'date_done': format_tanggal_indo(receipt.date_done.date()) if receipt.date_done else '',
