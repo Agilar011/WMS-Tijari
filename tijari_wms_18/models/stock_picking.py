@@ -72,6 +72,20 @@ class StockPicking(models.Model):
             return SQL("%s, %s", state_sort, sql)
         return sql
 
+    @api.model
+    def name_search(self, name='', args=None, operator='ilike', limit=100):
+        if not self.env.context.get('search_by_origin') or not name:
+            return super().name_search(
+                name=name, args=args, operator=operator, limit=limit,
+            )
+
+        domain = (args or []) + [('origin', operator, name)]
+        pickings = self.search_fetch(domain, ['origin', 'name'], limit=limit)
+        return [
+            (picking.id, f"{picking.origin} ({picking.name})")
+            for picking in pickings.sudo()
+        ]
+
     @api.depends('state', 'wave_split_ids', 'wave_split_ids.state')
     def _compute_wave_split_status(self):
         for picking in self:
@@ -312,6 +326,13 @@ class StockPicking(models.Model):
         string='Tipe Transaksi Over-Receipt',
         copy=False,
         tracking=True,
+    )
+    picking_id = fields.Many2one(
+        'stock.picking',
+        string='Source Document',
+        copy=False,
+        check_company=True,
+        domain="[('company_id', '=', company_id), ('picking_type_id.group_view', '=', 'receive')]",
     )
     ref_sotr = fields.Char(
         string='Ref. No. Document',
@@ -2141,6 +2162,18 @@ class StockPicking(models.Model):
     def action_confirm(self):
         _logger.debug(">>> action_confirm CALLED %s", self.ids)
         marked_as_todo = self.filtered(lambda picking: picking.state == 'draft')
+        over_receipt_without_source = marked_as_todo.filtered(
+            lambda picking: picking.stock_lebih and not picking.picking_id
+        )
+        if over_receipt_without_source:
+            raise ValidationError(_(
+                "Source Document wajib diisi sebelum Over-Receipt di-Mark as To Do."
+            ))
+        for picking in marked_as_todo.filtered(
+            lambda item: item.stock_lebih and item.picking_id
+        ):
+            picking.origin = picking.picking_id.origin
+
         over_receipt_moves = marked_as_todo.filtered(
             lambda picking: picking.stock_lebih
         ).mapped('move_ids').filtered(lambda move: move.product_uom_qty <= 0)
