@@ -46,7 +46,6 @@ class StockPicking(models.Model):
         'confirmed',
         'assigned',
         'waiting_response',
-        'waiting_approval',
         'return_shipment',
         'done',
         'cancel',
@@ -315,11 +314,6 @@ class StockPicking(models.Model):
     )
     ref_sotr = fields.Char(
         string='Ref. No. Document',
-        copy=False,
-        tracking=True,
-    )
-    transfer_shipment_discrepancy = fields.Boolean(
-        string='Transfer Shipment Quantity Discrepancy',
         copy=False,
         tracking=True,
     )
@@ -1222,7 +1216,6 @@ class StockPicking(models.Model):
             ('confirmed', 'Waiting'),
             ('assigned', 'Ready'),
             ('waiting_response', 'Waiting For Shipment'),
-            ('waiting_approval', 'Waiting For Approval'),
             ('return_shipment', 'Returned Shipment'),
             ('done', 'Done'),
             ('cancel', 'Cancelled'),
@@ -1240,7 +1233,6 @@ class StockPicking(models.Model):
             ('confirmed', 'Waiting'),
             ('assigned', 'Ready'),
             ('waiting_response', 'Waiting For Approval'),
-            ('waiting_approval', 'Waiting For Approval'),
             ('return_shipment', 'Returned Shipment'),
             ('done', 'Done'),
             ('cancel', 'Cancelled'),
@@ -1253,15 +1245,6 @@ class StockPicking(models.Model):
         ('partial', 'Partial Shipment'),
         ('full_shipment', 'Full Shipment'),
     ], string='Informasi TMS', help='Status shipment yang akan dikirimkan dari TMS.')
-
-    attachment_ids = fields.Many2many(
-        'ir.attachment',
-        'stock_picking_shipment_attachment_rel',
-        'picking_id',
-        'attachment_id',
-        string='Shipment Attachments',
-        copy=False,
-    )
 
     status_ba = fields.Selection([
         ('conform', 'Confirmed'),
@@ -1539,7 +1522,6 @@ class StockPicking(models.Model):
         "internal_transfer_leg",
         "picking_type_id",
         "picking_type_name",
-        "transfer_shipment_discrepancy",
         "approval_state",
         "shipment_information",
     )
@@ -1568,18 +1550,7 @@ class StockPicking(models.Model):
                     and picking.picking_type_id.code == "internal"
                 )
             )
-            is_transfer_shipment_discrepancy = bool(
-                picking.internal_transfer_order_id
-                and picking.internal_transfer_leg == "delivery"
-                and picking.picking_type_id.code == "internal"
-                and picking.adt_type == "Transfer Shipment"
-                and picking.transfer_shipment_discrepancy
-                and picking.approval_state != "approved"
-            )
-
-            if is_transfer_shipment_discrepancy:
-                picking.wms_state = "waiting_approval"
-            elif is_waiting_over_receipt:
+            if is_waiting_over_receipt:
                 picking.wms_state = 'waiting_response'
             elif is_ready_transfer_in_receipt:
                 # A transfer-in receipt is ready to process after Check
@@ -3243,16 +3214,6 @@ class StockPicking(models.Model):
         if (
             is_transfer_shipment_ito_delivery
             and not from_transfer_shipment_staging
-            and self.transfer_shipment_discrepancy
-            and self.approval_state != 'approved'
-        ):
-            raise UserError(_(
-                'Transfer Shipment discrepancy harus disetujui sebelum shipment dapat diselesaikan.'
-            ))
-        if (
-            is_transfer_shipment_ito_delivery
-            and not from_transfer_shipment_staging
-            and not self.transfer_shipment_discrepancy
             and (self.shipment_information == 'partial' or has_transfer_shipment_quantity_difference)
         ):
             raise UserError(_(
@@ -3443,43 +3404,7 @@ class StockPicking(models.Model):
         self.ensure_one()
         if self.stock_lebih and not (self.ref_sotr or '').strip():
             raise UserError(_('Ref. No. Document wajib diisi sebelum dokumen Over-Receipt dapat disetujui.'))
-        if self.transfer_shipment_discrepancy and not self.attachment_ids:
-            raise UserError(_(
-                'Lampiran wajib diisi sebelum discrepancy quantity Transfer Shipment dapat disetujui.'
-            ))
         return super().action_approve()
-
-    def _approval_approved(self):
-        result = super()._approval_approved()
-        for picking in self.filtered('transfer_shipment_discrepancy'):
-            if not picking.attachment_ids:
-                raise UserError(_(
-                    'Lampiran wajib diisi sebelum discrepancy quantity Transfer Shipment dapat disetujui.'
-                ))
-            if picking.shipment_information not in ('partial', 'full_shipment'):
-                raise UserError(_(
-                    'Shipment Information belum ditentukan untuk Transfer Shipment discrepancy.'
-                ))
-            picking.action_confirm_shipment()
-        return result
-
-    def _submit_transfer_shipment_discrepancy_approval(self):
-        self.ensure_one()
-        approval_type = self.approval_type_id or self.env.ref(
-            'tijari_wms_18.approval_type_over_receipt', raise_if_not_found=False,
-        )
-        if not approval_type:
-            raise UserError(_(
-                'Approval Type Discrepancy Quantity belum dikonfigurasi.'
-            ))
-
-        if not self.approval_type_id:
-            self.approval_type_id = approval_type
-        if not approval_type._get_approval_lines(0.0):
-            raise UserError(_(
-                'Tambahkan approver pada Approval Type %s terlebih dahulu.'
-            ) % approval_type.display_name)
-        self.action_submit_approval()
 
     def action_rollback_over_receipt_approval(self):
         self.ensure_one()
@@ -4564,7 +4489,6 @@ class StockPicking(models.Model):
             )
 
         self.shipment_information = 'full_shipment' if staging_matches_document else 'partial'
-        self.transfer_shipment_discrepancy = False
         return self.with_context(
             transfer_shipment_completed_from_staging=True,
         ).action_confirm_shipment()
@@ -5006,8 +4930,4 @@ class ApprovalRequest(models.Model):
                 raise UserError(
                     _('Ref. No. Document wajib diisi sebelum dokumen Over-Receipt dapat disetujui.')
                 )
-            if picking and picking.transfer_shipment_discrepancy and not picking.attachment_ids:
-                raise UserError(_(
-                    'Lampiran wajib diisi sebelum discrepancy quantity Transfer Shipment dapat disetujui.'
-                ))
         return super().action_approve()
