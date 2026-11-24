@@ -723,6 +723,11 @@
             </xpath>
 
             <xpath expr="//field[@name='partner_id']" position="after">
+                <field name="picking_id"
+                    string="Source Document"
+                    context="{'search_by_origin': True}"
+                    invisible="not stock_lebih"
+                    readonly="state != 'draft'"/>
                 <field name="internal_transfer_destination_location_id"
                     string="Lokasi Tujuan"
                     invisible="not show_internal_transfer_destination_location"/>
@@ -752,7 +757,7 @@
                        readonly="1"/>
                 <field name="status_ba" readonly="state in ('done', 'cancel')"/>
                 <separator string="Dokumen Over Receipt" colspan="2"
-                    invisible="not stock_lebih or (wms_state != 'waiting_response' and state != 'done')"/>
+                    invisible="not stock_lebih"/>
                 <field name="over_receipt_transaction_type"
                     string="Tipe Transaksi Over-Receipt"
                     invisible="not stock_lebih or (wms_state != 'waiting_response' and state != 'done')"

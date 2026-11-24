@@ -1,5 +1,6 @@
 from odoo import api, fields, models, _
 from odoo.exceptions import UserError, ValidationError
+from odoo.tools.float_utils import float_is_zero
 
 class StockPickingBatch(models.Model):
     _inherit = 'stock.picking.batch'
@@ -1486,6 +1487,22 @@ class StockMoveLineWaveResponsible(models.Model):
     _inherit = 'stock.move.line'
 
     def _add_to_wave(self, wave=False, description=False):
+        lines_without_reserved_quantity = self.filtered(
+            lambda line: float_is_zero(
+                line.product_uom_id._compute_quantity(
+                    line.quantity,
+                    line.product_id.uom_id,
+                    rounding_method='HALF-UP',
+                ),
+                precision_rounding=line.product_id.uom_id.rounding,
+            )
+        )
+        if lines_without_reserved_quantity:
+            raise UserError(_(
+                "Some selected operations have no reserved quantity and cannot be added to a wave. "
+                "Remove those lines from the selection and try again."
+            ))
+
         source_pickings_by_line = {
             line.id: line.picking_id
             for line in self
