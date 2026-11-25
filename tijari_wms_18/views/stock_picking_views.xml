@@ -1,28 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
 
-    <record id="stock_picking_search_tijari_operation_filters" model="ir.ui.view">
-        <field name="name">stock.picking.search.tijari.operation.filters</field>
-        <field name="model">stock.picking</field>
-        <field name="inherit_id" ref="stock.view_picking_internal_search"/>
-        <field name="arch" type="xml">
-            <xpath expr="//search/separator[1]" position="before">
-                <filter name="tijari_receive" string="Receive" domain="[('picking_type_id.group_view', '=', 'receive')]"/>
-                <filter name="tijari_pick" string="Pick" domain="[('picking_type_id.group_view', '=', 'pick')]"/>
-                <filter name="tijari_pack" string="Pack" domain="[('picking_type_id.group_view', '=', 'pack')]"/>
-                <filter name="tijari_delivery" string="Delivery" domain="[('picking_type_id.group_view', '=', 'delivery')]"/>
-                <filter name="tijari_manufacture" string="Manufacture" domain="[('picking_type_id.group_view', '=', 'manufacture')]"/>
-                <filter name="tijari_internal_intra" string="Internal Transfer - Intra" domain="[('internal_transfer_order_id.transaction_type', '=', 'intra_warehouse')]"/>
-                <filter name="tijari_internal_inter" string="Internal Transfer - Inter" domain="[('internal_transfer_order_id.transaction_type', '=', 'inter_warehouse')]"/>
-                <filter name="tijari_internal_transfer" string="Internal Transfers" domain="[('picking_type_id.name', 'in', ['Internal Transfer', 'Internal Transfers', 'Transfer Internal'])]"/>
-                <filter name="tijari_document_only" string="Document Only" domain="[('adt_is_document_only', '=', True)]"/>
-                <separator/>
-                <filter name="group_by_worklist_group_view" string="By Group View" context="{'group_by': 'worklist_group_view'}"/>
-                <filter name="group_by_adt_type" string="By Tipe Transaksi" context="{'group_by': 'adt_type'}"/>
-            </xpath>
-        </field>
-    </record>
-
      <record id="stock_picking_kanban_show_origin_without_activity" model="ir.ui.view">
         <field name="name">stock.picking.kanban.show.origin.without.activity</field>
         <field name="model">stock.picking</field>
@@ -222,7 +200,7 @@
                     string="Complete Shipment"
                     type="object"
                     class="btn-primary"
-                    invisible="not (internal_transfer_order_id and internal_transfer_leg == 'delivery' and picking_type_code == 'internal' and adt_type == 'Transfer Shipment') or wms_state != 'waiting_response' or transfer_shipment_discrepancy"/>
+                    invisible="not (internal_transfer_order_id and internal_transfer_leg == 'delivery' and picking_type_code == 'internal' and adt_type == 'Transfer Shipment') or wms_state != 'waiting_response'"/>
 
                 <button name="action_get_shipment_completed_staging"
                     string="Complete Shipment"
@@ -302,12 +280,6 @@
                     class="btn-secondary"
                     groups="stock.group_stock_user"
                     invisible="not stock_lebih or wms_state != 'waiting_response' or approval_state != 'waiting' or current_approver_id != uid"/>
-                <button name="action_approve"
-                    string="Approve"
-                    type="object"
-                    class="btn-primary"
-                    groups="stock.group_stock_user"
-                    invisible="not transfer_shipment_discrepancy or wms_state != 'waiting_approval' or approval_state != 'waiting' or current_approver_id != uid"/>
                 <button name="action_rollback_over_receipt_approval"
                     string="Rollback"
                     type="object"
@@ -639,7 +611,7 @@
 
             <xpath expr="//notebook/page[@name='note']" position="after">
                 <page string="Approval" name="over_receipt_approval"
-                    invisible="(not stock_lebih and not transfer_shipment_discrepancy) or state == 'draft'">
+                    invisible="not stock_lebih or state == 'draft'">
                     <group>
                         <group string="Approval Information">
                             <field name="approval_request_id" readonly="1"/>
@@ -729,6 +701,11 @@
             </xpath>
 
             <xpath expr="//field[@name='partner_id']" position="after">
+                <field name="picking_id"
+                    string="Source Document"
+                    context="{'search_by_origin': True}"
+                    invisible="not stock_lebih"
+                    readonly="state != 'draft'"/>
                 <field name="internal_transfer_destination_location_id"
                     string="Lokasi Tujuan"
                     invisible="not show_internal_transfer_destination_location"/>
@@ -758,7 +735,7 @@
                        readonly="1"/>
                 <field name="status_ba" readonly="state in ('done', 'cancel')"/>
                 <separator string="Dokumen Over Receipt" colspan="2"
-                    invisible="not stock_lebih or (wms_state != 'waiting_response' and state != 'done')"/>
+                    invisible="not stock_lebih"/>
                 <field name="over_receipt_transaction_type"
                     string="Tipe Transaksi Over-Receipt"
                     invisible="not stock_lebih or (wms_state != 'waiting_response' and state != 'done')"
@@ -781,9 +758,6 @@
 
             <xpath expr="//field[@name='status_ba']" position="after">
                 <field name="stock_lebih" invisible="1"/>
-                <field name="transfer_shipment_discrepancy" invisible="1"/>
-                <field name="attachment_ids" widget="many2many_binary"
-                    invisible="not transfer_shipment_discrepancy"/>
             </xpath>
 
             <xpath expr="//label[@for='partner_id'][@invisible=&quot;picking_type_code != 'incoming'&quot;]" position="attributes">
@@ -892,7 +866,7 @@
                         decoration-info="wms_state == 'assigned'"
                         decoration-muted="wms_state == 'draft'"
                         decoration-success="wms_state in ('done', 'return_shipment')"
-                        decoration-warning="wms_state in ('waiting', 'waiting_response', 'waiting_approval')"/>
+                        decoration-warning="wms_state in ('waiting', 'waiting_response')"/>
                     <field name="user_ids" widget="many2many_avatar_user" optional="show"/>
                     <field name="batch_id" string="Batch" optional="hide"/>
                 </list>

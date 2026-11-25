@@ -1,0 +1,167 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!--
+        Search view untuk menu-menu di Inventory > Operations.
+        Setiap list punya Group By siap pakai sesuai kolom yang tampil di list
+        (field stored; bukan angka/qty dan bukan referensi unik).
+    -->
+
+    <!-- ===== stock.picking: Receive & Storage, Deliveries, Pick, Pack, Document Only,
+         Over-Receipt Document, Consignment Overview, Auto-Transaction Log ===== -->
+    <record id="stock_picking_search_tijari_operation_filters" model="ir.ui.view">
+        <field name="name">stock.picking.search.tijari.operation.filters</field>
+        <field name="model">stock.picking</field>
+        <field name="inherit_id" ref="stock.view_picking_internal_search"/>
+        <field name="arch" type="xml">
+            <xpath expr="//search/separator[1]" position="before">
+                <filter name="tijari_receive" string="Receive" domain="[('picking_type_id.group_view', '=', 'receive')]"/>
+                <filter name="tijari_pick" string="Pick" domain="[('picking_type_id.group_view', '=', 'pick')]"/>
+                <filter name="tijari_pack" string="Pack" domain="[('picking_type_id.group_view', '=', 'pack')]"/>
+                <filter name="tijari_delivery" string="Delivery" domain="[('picking_type_id.group_view', '=', 'delivery')]"/>
+                <filter name="tijari_manufacture" string="Manufacture" domain="[('picking_type_id.group_view', '=', 'manufacture')]"/>
+                <filter name="tijari_internal_intra" string="Internal Transfer - Intra" domain="[('internal_transfer_order_id.transaction_type', '=', 'intra_warehouse')]"/>
+                <filter name="tijari_internal_inter" string="Internal Transfer - Inter" domain="[('internal_transfer_order_id.transaction_type', '=', 'inter_warehouse')]"/>
+                <filter name="tijari_internal_transfer" string="Internal Transfers" domain="[('picking_type_id.name', 'in', ['Internal Transfer', 'Internal Transfers', 'Transfer Internal'])]"/>
+                <filter name="tijari_document_only" string="Document Only" domain="[('adt_is_document_only', '=', True)]"/>
+                <separator/>
+                <filter name="group_by_adt_type" string="By Tipe Transaksi" context="{'group_by': 'adt_type'}"/>
+                <filter name="tijari_groupby_wms_state" string="WMS State" context="{'group_by': 'wms_state'}"/>
+                <filter name="tijari_groupby_partner" string="Contact" context="{'group_by': 'partner_id'}"/>
+                <filter name="tijari_groupby_location" string="Source Location" context="{'group_by': 'location_id'}" groups="stock.group_stock_multi_locations"/>
+                <filter name="tijari_groupby_user_ids" string="Responsible Users" context="{'group_by': 'user_ids'}"/>
+                <filter name="tijari_groupby_document_only" string="Is Document Only" context="{'group_by': 'adt_is_document_only'}"/>
+                <filter name="tijari_groupby_company" string="Company" context="{'group_by': 'company_id'}" groups="base.group_multi_company"/>
+            </xpath>
+        </field>
+    </record>
+    <!-- ===== Internal Transfer Orders ===== -->
+    <record id="internal_transfer_order_view_search" model="ir.ui.view">
+        <field name="name">internal.transfer.order.search</field>
+        <field name="model">internal.transfer.order</field>
+        <field name="arch" type="xml">
+            <search string="Internal Transfer Orders">
+                <field name="name"/>
+                <field name="transaction_type"/>
+                <field name="transfer_type"/>
+                <field name="location_id"/>
+                <field name="location_dest_id"/>
+                <filter string="Draft" name="draft" domain="[('state', '=', 'draft')]"/>
+                <filter string="Ready" name="ready" domain="[('state', '=', 'ready')]"/>
+                <filter string="Done" name="done" domain="[('state', '=', 'done')]"/>
+                <group expand="0" string="Group By">
+                    <filter string="Kategori Transfer" name="group_transaction_type" context="{'group_by': 'transaction_type'}"/>
+                    <filter string="Transfer Type" name="group_transfer_type" context="{'group_by': 'transfer_type'}"/>
+                    <filter string="Status" name="group_state" context="{'group_by': 'state'}"/>
+                    <filter string="Tipe Transaksi" name="group_adt_transaction_type" context="{'group_by': 'adt_transaction_type'}"/>
+                    <filter string="Source Location" name="group_location" context="{'group_by': 'location_id'}"/>
+                    <filter string="Destination Location" name="group_location_dest" context="{'group_by': 'location_dest_id'}"/>
+                    <filter string="Schedule Date" name="group_schedule_date" context="{'group_by': 'schedule_date'}"/>
+                    <filter string="Validation Policy" name="group_validation_policy" context="{'group_by': 'validation_policy'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <!-- ===== Batch Transfers / Wave Transfers ===== -->
+    <record id="stock_picking_batch_search_tijari_groupby" model="ir.ui.view">
+        <field name="name">stock.picking.batch.search.tijari.groupby</field>
+        <field name="model">stock.picking.batch</field>
+        <field name="inherit_id" ref="stock_picking_batch.stock_picking_batch_filter"/>
+        <field name="arch" type="xml">
+            <xpath expr="//group/filter[@name='state']" position="after">
+                <filter name="tijari_groupby_picking_type" string="Operation Type" context="{'group_by': 'picking_type_id'}"/>
+                <filter name="tijari_groupby_scheduled_date" string="Scheduled Date" context="{'group_by': 'scheduled_date'}"/>
+                <filter name="tijari_groupby_company" string="Company" context="{'group_by': 'company_id'}" groups="base.group_multi_company"/>
+            </xpath>
+        </field>
+    </record>
+
+    <!-- ===== Manufacturings ===== -->
+    <record id="mrp_production_search_tijari_groupby" model="ir.ui.view">
+        <field name="name">mrp.production.search.tijari.groupby</field>
+        <field name="model">mrp.production</field>
+        <field name="inherit_id" ref="mrp.view_mrp_production_filter"/>
+        <field name="arch" type="xml">
+            <xpath expr="//group/filter[@name='date']" position="after">
+                <filter name="tijari_groupby_priority" string="Priority" context="{'group_by': 'priority'}"/>
+                <filter name="tijari_groupby_origin" string="Source" context="{'group_by': 'origin'}"/>
+                <filter name="tijari_groupby_date_finished" string="End" context="{'group_by': 'date_finished'}"/>
+                <filter name="tijari_groupby_date_deadline" string="Deadline" context="{'group_by': 'date_deadline'}"/>
+                <filter name="tijari_groupby_lot_producing" string="Lot/Serial Number" context="{'group_by': 'lot_producing_id'}"/>
+                <filter name="tijari_groupby_bom" string="Bill of Material" context="{'group_by': 'bom_id'}"/>
+                <filter name="tijari_groupby_user" string="Responsible" context="{'group_by': 'user_id'}"/>
+                <filter name="tijari_groupby_uom" string="Product Unit of Measure" context="{'group_by': 'product_uom_id'}" groups="uom.group_uom"/>
+                <filter name="tijari_groupby_company" string="Company" context="{'group_by': 'company_id'}" groups="base.group_multi_company"/>
+            </xpath>
+        </field>
+    </record>
+
+    <!-- ===== Unbuild Orders ===== -->
+    <record id="mrp_unbuild_search_tijari_groupby" model="ir.ui.view">
+        <field name="name">mrp.unbuild.search.tijari.groupby</field>
+        <field name="model">mrp.unbuild</field>
+        <field name="inherit_id" ref="mrp.mrp_unbuild_search_view"/>
+        <field name="arch" type="xml">
+            <xpath expr="//group/filter[@name='mogroup']" position="after">
+                <filter name="tijari_groupby_bom" string="Bill of Material" context="{'group_by': 'bom_id'}"/>
+                <filter name="tijari_groupby_lot" string="Lot/Serial Number" context="{'group_by': 'lot_id'}" groups="stock.group_production_lot"/>
+                <filter name="tijari_groupby_location" string="Source Location" context="{'group_by': 'location_id'}" groups="stock.group_stock_multi_locations"/>
+                <filter name="tijari_groupby_uom" string="Unit of Measure" context="{'group_by': 'product_uom_id'}" groups="uom.group_uom"/>
+                <filter name="tijari_groupby_company" string="Company" context="{'group_by': 'company_id'}" groups="base.group_multi_company"/>
+                <filter name="tijari_groupby_state" string="Status" context="{'group_by': 'state'}"/>
+            </xpath>
+        </field>
+    </record>
+
+    <!-- ===== Replenishment ===== -->
+    <record id="stock_reorder_report_search_tijari_groupby" model="ir.ui.view">
+        <field name="name">stock.warehouse.orderpoint.reorder.search.tijari.groupby</field>
+        <field name="model">stock.warehouse.orderpoint</field>
+        <field name="inherit_id" ref="stock.stock_reorder_report_search"/>
+        <field name="arch" type="xml">
+            <xpath expr="//group/filter[@name='groupby_category']" position="after">
+                <filter name="tijari_groupby_route" string="Route" context="{'group_by': 'route_id'}"/>
+                <filter name="tijari_groupby_bom" string="Bill of Materials" context="{'group_by': 'bom_id'}"/>
+                <filter name="tijari_groupby_trigger" string="Trigger" context="{'group_by': 'trigger'}"/>
+                <filter name="tijari_groupby_procurement_group" string="Procurement Group" context="{'group_by': 'group_id'}" groups="stock.group_adv_location"/>
+                <filter name="tijari_groupby_company" string="Company" context="{'group_by': 'company_id'}" groups="base.group_multi_company"/>
+            </xpath>
+        </field>
+    </record>
+
+    <!-- ===== Stock Opname ===== -->
+    <record id="stock_inventory_search_tijari_groupby" model="ir.ui.view">
+        <field name="name">stock.inventory.search.tijari.groupby</field>
+        <field name="model">stock.inventory</field>
+        <field name="inherit_id" ref="stock_inventory.stock_inventory_search_view"/>
+        <field name="arch" type="xml">
+            <xpath expr="//search" position="inside">
+                <group expand="0" string="Group By">
+                    <filter name="tijari_groupby_product_selection" string="Product Selection" context="{'group_by': 'product_selection'}"/>
+                    <filter name="tijari_groupby_locations" string="Locations" context="{'group_by': 'location_ids'}"/>
+                    <filter name="tijari_groupby_responsible" string="Assigned to" context="{'group_by': 'responsible_id'}"/>
+                    <filter name="tijari_groupby_state" string="State" context="{'group_by': 'state'}"/>
+                    <filter name="tijari_groupby_date" string="Date" context="{'group_by': 'date'}"/>
+                    <filter name="tijari_groupby_company" string="Company" context="{'group_by': 'company_id'}"/>
+                </group>
+            </xpath>
+        </field>
+    </record>
+
+    <!-- ===== Disposal Item ===== -->
+    <record id="stock_scrap_search_tijari_groupby" model="ir.ui.view">
+        <field name="name">stock.scrap.search.tijari.groupby</field>
+        <field name="model">stock.scrap</field>
+        <field name="inherit_id" ref="stock.stock_scrap_search_view"/>
+        <field name="arch" type="xml">
+            <xpath expr="//group/filter[@name='transfer']" position="after">
+                <filter name="tijari_groupby_origin" string="Source Document" context="{'group_by': 'origin'}"/>
+                <filter name="tijari_groupby_scheduled_date" string="Scheduled Date" context="{'group_by': 'scheduled_date'}"/>
+                <filter name="tijari_groupby_date_done" string="Date" context="{'group_by': 'date_done'}"/>
+                <filter name="tijari_groupby_uom" string="Unit of Measure" context="{'group_by': 'product_uom_id'}" groups="uom.group_uom"/>
+                <filter name="tijari_groupby_company" string="Company" context="{'group_by': 'company_id'}" groups="base.group_multi_company"/>
+                <filter name="tijari_groupby_state" string="Status" context="{'group_by': 'state'}"/>
+            </xpath>
+        </field>
+    </record>
+</odoo>
