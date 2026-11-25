@@ -8,8 +8,8 @@
                 <field name="state"/>
                 <filter name="active_jobs" string="Active" domain="[('state', 'in', ('queued', 'running'))]"/>
                 <group expand="0" string="Group By">
-                    <filter name="group_by_state" string="Status" context="{'group_by': 'state'}"/>
-                    <filter name="group_by_warehouse_code" string="Warehouse Code" context="{'group_by': 'warehouse_code'}"/>
+                    <filter name="group_by_warehouse_code" string="Location Code (Acumatica)" context="{'group_by': 'warehouse_code'}"/>
+                    <filter name="group_by_state" string="State" context="{'group_by': 'state'}"/>
                     <filter name="group_by_requested_by" string="Requested By" context="{'group_by': 'requested_by_id'}"/>
                     <filter name="group_by_started_at" string="Started At" context="{'group_by': 'started_at'}"/>
                     <filter name="group_by_finished_at" string="Finished At" context="{'group_by': 'finished_at'}"/>
