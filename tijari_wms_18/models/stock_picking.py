@@ -211,8 +211,12 @@ class StockPicking(models.Model):
                     'action_print_warehouse_pack',
                     'action_print_warehouse_transfer',
                     'delivery_slip_pack',
+                    'action_send_email_hasil_picking',
+                    'action_send_email_hasil_pick',
+                    'action_send_email_hasil_pack',
+                    'action_send_email_hasil_transfer',
                 }:
-                    # Operators can print BA documents for each operation;
+                    # Operators can print and email BA documents for each operation;
                     # retain each button's own state/type visibility.
                     continue
                 else:
