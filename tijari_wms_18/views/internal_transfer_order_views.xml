@@ -252,28 +252,6 @@
         </field>
     </record>
 
-    <record id="internal_transfer_order_view_search" model="ir.ui.view">
-        <field name="name">internal.transfer.order.search</field>
-        <field name="model">internal.transfer.order</field>
-        <field name="arch" type="xml">
-            <search string="Internal Transfer Orders">
-                <field name="name"/>
-                <field name="transaction_type"/>
-                <field name="transfer_type"/>
-                <field name="location_id"/>
-                <field name="location_dest_id"/>
-                <filter string="Draft" name="draft" domain="[('state', '=', 'draft')]"/>
-                <filter string="Ready" name="ready" domain="[('state', '=', 'ready')]"/>
-                <filter string="Done" name="done" domain="[('state', '=', 'done')]"/>
-                <group expand="0" string="Group By">
-                    <filter string="By Tipe Transaksi" name="group_transaction_type" context="{'group_by': 'transaction_type'}"/>
-                    <filter string="Transfer Type" name="group_transfer_type" context="{'group_by': 'transfer_type'}"/>
-                    <filter string="Status" name="group_state" context="{'group_by': 'state'}"/>
-                </group>
-            </search>
-        </field>
-    </record>
-
     <record id="action_internal_transfer_order" model="ir.actions.act_window">
         <field name="name">Internal Transfer Orders</field>
         <field name="res_model">internal.transfer.order</field>

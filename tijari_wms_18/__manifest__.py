@@ -65,6 +65,7 @@
         'views/stock_picking_action.xml',
         'views/stock_picking_type_views.xml',
         'views/stock_picking_views.xml',
+        'views/operations_search_views.xml',
         'views/stock_picking_batch_views.xml',
         'views/stock_package_level_views.xml',
         'views/stock_report_aging_views.xml',

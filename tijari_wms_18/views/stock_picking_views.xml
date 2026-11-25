@@ -1,28 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
 
-    <record id="stock_picking_search_tijari_operation_filters" model="ir.ui.view">
-        <field name="name">stock.picking.search.tijari.operation.filters</field>
-        <field name="model">stock.picking</field>
-        <field name="inherit_id" ref="stock.view_picking_internal_search"/>
-        <field name="arch" type="xml">
-            <xpath expr="//search/separator[1]" position="before">
-                <filter name="tijari_receive" string="Receive" domain="[('picking_type_id.group_view', '=', 'receive')]"/>
-                <filter name="tijari_pick" string="Pick" domain="[('picking_type_id.group_view', '=', 'pick')]"/>
-                <filter name="tijari_pack" string="Pack" domain="[('picking_type_id.group_view', '=', 'pack')]"/>
-                <filter name="tijari_delivery" string="Delivery" domain="[('picking_type_id.group_view', '=', 'delivery')]"/>
-                <filter name="tijari_manufacture" string="Manufacture" domain="[('picking_type_id.group_view', '=', 'manufacture')]"/>
-                <filter name="tijari_internal_intra" string="Internal Transfer - Intra" domain="[('internal_transfer_order_id.transaction_type', '=', 'intra_warehouse')]"/>
-                <filter name="tijari_internal_inter" string="Internal Transfer - Inter" domain="[('internal_transfer_order_id.transaction_type', '=', 'inter_warehouse')]"/>
-                <filter name="tijari_internal_transfer" string="Internal Transfers" domain="[('picking_type_id.name', 'in', ['Internal Transfer', 'Internal Transfers', 'Transfer Internal'])]"/>
-                <filter name="tijari_document_only" string="Document Only" domain="[('adt_is_document_only', '=', True)]"/>
-                <separator/>
-                <filter name="group_by_worklist_group_view" string="By Group View" context="{'group_by': 'worklist_group_view'}"/>
-                <filter name="group_by_adt_type" string="By Tipe Transaksi" context="{'group_by': 'adt_type'}"/>
-            </xpath>
-        </field>
-    </record>
-
      <record id="stock_picking_kanban_show_origin_without_activity" model="ir.ui.view">
         <field name="name">stock.picking.kanban.show.origin.without.activity</field>
         <field name="model">stock.picking</field>
