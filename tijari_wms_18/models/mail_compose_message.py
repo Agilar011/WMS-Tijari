@@ -94,7 +94,7 @@ class MailComposeMessage(models.TransientModel):
                 composer.partner_ids = (
                     composer.partner_ids | composer._get_group_partner_ids()
                 )
-        if any(
+        is_ba_email = any(
             self.env.context.get(flag)
             for flag in (
                 "tijari_hasil_picking_email",
@@ -102,12 +102,19 @@ class MailComposeMessage(models.TransientModel):
                 "tijari_hasil_pack_email",
                 "tijari_hasil_transfer_email",
             )
-        ) and any(
+        )
+        if is_ba_email and any(
             not composer.partner_ids for composer in self
         ):
             raise ValidationError(
                 "Pilih minimal satu partner pada penerima email terlebih dahulu."
             )
+        if is_ba_email:
+            for composer in self:
+                if composer.partner_ids.filtered(lambda partner: not partner.email):
+                    raise ValidationError(_(
+                        "Setiap penerima harus memiliki alamat email sebelum BA dikirim."
+                    ))
         if self.env.context.get("tijari_inventory_approval_email") and any(
             not composer.partner_ids for composer in self
         ):
