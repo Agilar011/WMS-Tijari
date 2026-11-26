@@ -2325,6 +2325,33 @@ class StockPicking(models.Model):
         # Untuk picking type incomine, kalo dibutuhkan untuk internal, manufacturing, dan lain lain bisa ditambahkan "self.picking_type_id.code in ["incoming", "internal", "manufacturing"]" atau yang lain sesuai kebutuhan
         return self.picking_type_id.code == "incoming"
 
+    def _notify_get_recipients(self, message, msg_vals, **kwargs):
+        """Email explicitly selected BA recipients, regardless of inbox preference."""
+        is_ba_email = any(
+            self.env.context.get(flag)
+            for flag in (
+                'tijari_hasil_picking_email',
+                'tijari_hasil_pick_email',
+                'tijari_hasil_pack_email',
+                'tijari_hasil_transfer_email',
+            )
+        )
+        if not is_ba_email:
+            return super()._notify_get_recipients(message, msg_vals, **kwargs)
+
+        partner_ids = set(
+            msg_vals.get('partner_ids', [])
+            if msg_vals else message.sudo().partner_ids.ids
+        )
+        if self.env.user.partner_id.id in partner_ids:
+            kwargs['notify_author'] = True
+        recipients = super()._notify_get_recipients(message, msg_vals, **kwargs)
+        return [
+            dict(recipient, notif='email')
+            if recipient['id'] in partner_ids else recipient
+            for recipient in recipients
+        ]
+
     def action_send_email_hasil_picking(self):
         self.ensure_one()
 
