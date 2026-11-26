@@ -7,6 +7,7 @@ import qrcode
 import io
 from odoo.exceptions import AccessError, UserError, ValidationError
 from lxml import etree
+from markupsafe import Markup
 from odoo.tools.float_utils import float_is_zero
 import logging
 
@@ -46,12 +47,6 @@ class InventoryAdjustmentsGroup(models.Model):
             result['arch'] = etree.tostring(arch, encoding='unicode')
         return result
 
-    @api.model_create_multi
-    def create(self, vals_list):
-        if not self.env.su and self._is_operator_only():
-            raise AccessError(_('Warehouse Operator tidak memiliki akses untuk membuat Adjustment Document.'))
-        return super().create(vals_list)
-
     def unlink(self):
         if not self.env.su and self._is_operator_only():
             raise AccessError(_('Warehouse Operator tidak memiliki akses untuk menghapus Adjustment Document.'))
@@ -59,6 +54,15 @@ class InventoryAdjustmentsGroup(models.Model):
 
     @api.model_create_multi
     def create(self, vals_list):
+        # Users who are Operators but also hold another group with create
+        # rights (e.g. Warehouse Head) keep their ACL access; the guard only
+        # replaces the generic ACL error for Operators without that right.
+        if (
+            not self.env.su
+            and self._is_operator_only()
+            and not self.env['ir.model.access'].check(self._name, 'create', raise_exception=False)
+        ):
+            raise AccessError(_('Warehouse Operator tidak memiliki akses untuk membuat Adjustment Document.'))
         inventories = super().create(vals_list)
         if 'responsible_id' in self._fields:
             notifier = self.env['wms.assignment.notification.mixin']
@@ -149,6 +153,92 @@ class InventoryAdjustmentsGroup(models.Model):
                 'tijari_inventory_approval_email': True,
             },
         }
+
+    # ------------------------------------------------------------------
+    # Approval push notifications (Discuss chat + web push)
+    # ------------------------------------------------------------------
+    def _get_approval_notification_link(self):
+        self.ensure_one()
+        return Markup('<a href="{}">{}</a>').format(
+            '/web#id=%s&model=%s&view_type=form' % (self.id, self._name),
+            self.name or self.display_name,
+        )
+
+    def _notify_current_approver(self):
+        """Tell the approver whose turn it is that the adjustment waits for them."""
+        notifier = self.env['wms.assignment.notification.mixin']
+        for inventory in self.filtered(lambda rec: rec.current_approver_id):
+            notifier._send_document_chat_notification(
+                inventory.current_approver_id,
+                inventory,
+                Markup(
+                    '<p>Stock Opname {} menunggu approval Anda. '
+                    'Silakan periksa hasil hitung sebelum menyetujui.</p>'
+                ).format(inventory._get_approval_notification_link()),
+            )
+
+    def _notify_approval_result(self, approved):
+        """Tell the creator and the responsible user the final approval result."""
+        notifier = self.env['wms.assignment.notification.mixin']
+        for inventory in self:
+            # An old request left behind by Back to Draft can still be
+            # approved or rejected from the Approval menu. Only announce a
+            # result when the adjustment's active request carries it.
+            if approved and inventory.approval_state != 'approved':
+                continue
+            if not approved and inventory.approval_state not in ('rejected', 'cancelled'):
+                continue
+            result = _('disetujui') if approved else _('ditolak')
+            next_step = (
+                _('Silakan lanjutkan dengan Update Stock.')
+                if approved else ''
+            )
+            notifier._send_document_chat_notification(
+                inventory.responsible_id | inventory.create_uid,
+                inventory,
+                Markup('<p>Stock Opname {} telah {} oleh {}. {}</p>').format(
+                    inventory._get_approval_notification_link(),
+                    result,
+                    self.env.user.name,
+                    next_step,
+                ),
+            )
+
+    def action_state_to_wait_approval(self):
+        result = super().action_state_to_wait_approval()
+        self._notify_current_approver()
+        return result
+
+    def _approval_approved(self):
+        result = super()._approval_approved()
+        self._notify_approval_result(approved=True)
+        return result
+
+    def _approval_rejected(self):
+        result = super()._approval_rejected()
+        self._notify_approval_result(approved=False)
+        return result
+
+
+class ApprovalRequestStockInventory(models.Model):
+    _inherit = 'approval.request'
+
+    def action_approve(self):
+        result = super().action_approve()
+        # An intermediate approval moves the request to the next approver:
+        # notify them once the adjustment is waiting for approval.
+        for request in self:
+            if request.source_model != 'stock.inventory' or request.state != 'waiting':
+                continue
+            inventory = request._get_source_document()
+            if (
+                inventory.exists()
+                and inventory.approval_request_id == request
+                and inventory.state == 'wait_approval'
+            ):
+                inventory._notify_current_approver()
+        return result
+
 
 class StockScrap(models.Model):
     _inherit = "stock.scrap"

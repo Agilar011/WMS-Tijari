@@ -66,6 +66,41 @@ class WMSAssignmentNotification(models.AbstractModel):
                 )
 
     @api.model
+    def _send_document_chat_notification(self, users, document, body):
+        """Send one private Discuss message (and its web push) per user
+        about a single document. The push opens that document."""
+        if self.env.context.get('skip_assignment_chat_notification'):
+            return
+
+        current_partner = self.env.user.partner_id
+        push_target = {'model': document._name, 'res_id': document.id}
+        for user in users.exists().filtered(lambda target_user: (
+            target_user.active
+            and not target_user.share
+            and target_user.id != self.env.uid
+            and target_user.partner_id
+        )):
+            try:
+                with self.env.cr.savepoint():
+                    channel = self.env['discuss.channel'].channel_get(
+                        (current_partner | user.partner_id).ids
+                    )
+                    channel.with_context(
+                        wms_assignment_push_target=push_target,
+                    ).message_post(
+                        body=body,
+                        message_type='comment',
+                        subtype_xmlid='mail.mt_comment',
+                    )
+            except Exception:
+                # A notification failure must not roll back the document.
+                import logging
+                logging.getLogger(__name__).exception(
+                    'Unable to send WMS chat notification to user %s',
+                    user.id,
+                )
+
+    @api.model
     def _get_assignment_push_target(self, documents):
         """Choose the record opened when the recipient clicks the push alert."""
         batch_ids = [
