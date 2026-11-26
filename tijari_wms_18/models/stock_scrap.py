@@ -41,12 +41,6 @@ class WMSStockScrap(models.Model):
             result['arch'] = etree.tostring(arch, encoding='unicode')
         return result
 
-    @api.model_create_multi
-    def create(self, vals_list):
-        if not self.env.su and self._is_operator_only():
-            raise AccessError(_('Warehouse Operator hanya memiliki akses baca pada Disposal Document.'))
-        return super().create(vals_list)
-
     def write(self, vals):
         if not self.env.su and self._is_operator_only():
             writable_fields = {
@@ -321,6 +315,15 @@ class WMSStockScrap(models.Model):
 
     @api.model_create_multi
     def create(self, vals_list):
+        # Users who are Operators but also hold another group with create
+        # rights (e.g. Warehouse Head) keep their ACL access; the guard only
+        # replaces the generic ACL error for Operators without that right.
+        if (
+            not self.env.su
+            and self._is_operator_only()
+            and not self.env['ir.model.access'].check(self._name, 'create', raise_exception=False)
+        ):
+            raise AccessError(_('Warehouse Operator hanya memiliki akses baca pada Disposal Document.'))
         for vals in vals_list:
             if vals.get("product_id"):
                 continue
@@ -355,6 +358,7 @@ class WMSStockScrap(models.Model):
 
 
         self._check_all_lot_match()
+        self._check_scrapped_qty_vs_demand()
 
         for line in self.scrap_line_ids:
 
@@ -486,15 +490,13 @@ class WMSStockScrap(models.Model):
         return vals
 
     def _check_line_availability(self, line):
-        locations = self._get_scrap_locations(line.location_id)
-
-        available_qty = sum(
-            self.env["stock.quant"]._get_available_quantity(
-                line.product_id,
-                location,
-            )
-            for location in locations
-        )
+        # _get_available_quantity on the source location already includes
+        # its sub-locations. Summing it per child location counted stock in
+        # sub-locations more than once.
+        available_qty = self.env["stock.quant"]._get_available_quantity(
+            line.product_id,
+            line.location_id,
+        ) if line.location_id else 0.0
 
         line.available_qty = available_qty
 
@@ -621,7 +623,9 @@ class WMSStockScrap(models.Model):
             ) <= 0:
                 break
 
-            available_qty = quant.quantity
+            # Skip stock reserved by other documents; action_validate
+            # rejects it anyway because it checks the available quantity.
+            available_qty = quant.quantity - quant.reserved_quantity
 
             if float_compare(
                 available_qty,
@@ -672,6 +676,26 @@ class WMSStockScrap(models.Model):
             raise UserError(_(
                 f"All products must be in Finished status.\n\n{text}"
         ))
+
+    def _check_scrapped_qty_vs_demand(self):
+        """Block validation when the scanned quantity is below the demand,
+        so a Disposal cannot finish smaller than the Acumatica document."""
+        short_lines = self.scrap_line_ids.filtered(
+            lambda line: float_compare(
+                line.scrapped_qty,
+                line.demand_qty,
+                precision_rounding=line.product_uom_id.rounding or 0.01,
+            ) < 0
+        )
+        if short_lines:
+            text = "\n".join(
+                f"- {line.product_id.display_name}: {line.scrapped_qty:g} dari {line.demand_qty:g}"
+                for line in short_lines
+            )
+            raise UserError(_(
+                "Qty yang di-scan masih kurang dari demand. "
+                "Lengkapi scan atau jalankan Check Availability lagi.\n\n%s"
+            ) % text)
 
     def _get_scrap_locations(self, location):
         return self.env["stock.location"].search([
@@ -944,11 +968,12 @@ class WMSScrapMoveLine(models.Model):
 
     @api.depends('matching_lot_id')
     def _compute_match_status(self):
-        expected_lot = self.lot_id
-        if self.matching_lot_id == expected_lot:
-            self.match_status = 'match'
-        else: 
-            self.match_status = 'not_match'
+        for line in self:
+            expected_lot = line.lot_id
+            if line.matching_lot_id == expected_lot:
+                line.match_status = 'match'
+            else:
+                line.match_status = 'not_match'
 
     handheld_scan_code = fields.Char(
         string='Scan Handheld',
