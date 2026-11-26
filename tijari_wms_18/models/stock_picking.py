@@ -3976,7 +3976,14 @@ class StockPicking(models.Model):
                 existing_pick_components_backorders.get(rec.id)
             )
 
-            if rec.picking_type_name in ['Delivery Orders'] and rec.adt_type in ['Sales Order Shipment', 'SO Shipment']:
+            # Only a DO that is actually done waits for the shipment data.
+            # When super() returns the backorder wizard, the DO is not done
+            # yet; the wizard calls button_validate again once it is.
+            if (
+                rec.picking_type_name in ['Delivery Orders']
+                and rec.adt_type in ['Sales Order Shipment', 'SO Shipment']
+                and rec.state == 'done'
+            ):
                 rec.wms_state = 'waiting_response'
 
             if (

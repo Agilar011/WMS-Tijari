@@ -753,6 +753,14 @@ class InventoryAdjustmentsGroup(models.Model):
     def action_state_to_draft(self):
         self.ensure_one()
 
+        # Begin creates a new approval request, so any request still
+        # waiting for this adjustment must not stay approvable.
+        self.env["approval.request"].search([
+            ("source_model", "=", self._name),
+            ("source_id", "=", self.id),
+            ("state", "=", "waiting"),
+        ]).write({"state": "cancelled"})
+
         quants = self.stock_quant_ids.filtered(
             lambda q: q.current_inventory_id.id == self.id
         )
