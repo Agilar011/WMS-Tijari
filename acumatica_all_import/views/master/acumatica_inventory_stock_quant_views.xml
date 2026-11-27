@@ -13,6 +13,12 @@
                 <filter name="unmatch" string="Unmatch" domain="[('match_status', '=', 'not_match')]"/>
                 <filter name="missing_product" string="Missing Product" domain="[('match_status', '=', 'missing_product')]"/>
                 <filter name="missing_location" string="Missing Location" domain="[('match_status', '=', 'missing_location')]"/>
+                <group expand="0" string="Group By">
+                    <filter name="group_by_location" string="Location" context="{'group_by': 'location_id'}"/>
+                    <filter name="group_by_warehouse_code" string="Warehouse Code" context="{'group_by': 'warehouse_code'}"/>
+                    <filter name="group_by_inventory_id" string="InventoryID" context="{'group_by': 'inventory_id'}"/>
+                    <filter name="group_by_sync_date" string="Last API Sync" context="{'group_by': 'sync_date'}"/>
+                </group>
             </search>
         </field>
     </record>
